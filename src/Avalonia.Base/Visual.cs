@@ -316,11 +316,7 @@ namespace Avalonia
         /// <summary>
         /// Gets the control's child visuals.
         /// </summary>
-        protected internal IAvaloniaList<Visual> VisualChildren
-        {
-            get;
-            private set;
-        }
+        protected internal IAvaloniaList<Visual> VisualChildren { get; }
 
         /// <summary>
         /// Gets the root of the visual tree, if the control is attached to a visual tree.

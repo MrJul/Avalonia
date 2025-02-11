@@ -226,6 +226,7 @@ namespace Avalonia.Utilities
         /// if the property is found; otherwise, null. This parameter is passed uninitialized.
         /// </param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(AvaloniaProperty property, [MaybeNullWhen(false)] out TValue value)
         {
             // <!> Very performance critical code: FindEntry has been manually inlined here.

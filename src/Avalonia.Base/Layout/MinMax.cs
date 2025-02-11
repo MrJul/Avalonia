@@ -7,34 +7,49 @@ namespace Avalonia.Layout;
 /// </summary>
 internal struct MinMax
 {
+    public double Width;
     public double MinWidth;
     public double MaxWidth;
+    public double Height;
     public double MinHeight;
     public double MaxHeight;
 
     public MinMax(Layoutable e)
     {
-        ClampDimension(e.Width, e.MinWidth, e.MaxWidth, out MinWidth, out MaxWidth);
-        ClampDimension(e.Height, e.MinHeight, e.MaxHeight, out MinHeight, out MaxHeight);
+        Width = e.Width;
+        (MinWidth, MaxWidth) = ClampDimension(Width, e.MinWidth, e.MaxWidth);
+
+        Height = e.Height;
+        (MinHeight, MaxHeight) = ClampDimension(e.Height, e.MinHeight, e.MaxHeight);
     }
 
+    private static (double MinResult, double MaxResult) ClampDimension(double value, double min, double max)
+    {
+        if (double.IsNaN(value))
+        {
+            return (Clamp(0.0, min, max), Clamp(double.PositiveInfinity, min, max));
+        }
+        else
+        {
+            var result = Clamp(value, min, max);
+            return (result, result);
+        }
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ClampDimension(double l, double min, double max, out double minResult, out double maxResult)
+    private static double Clamp(double val, double min, double max)
     {
-        var (minL, maxL) = double.IsNaN(l) ? (0.0, double.PositiveInfinity) : (l, l);
-
-        if (minL > max)
-            minL = max;
-        if (minL < min)
-            minL = min;
-
-        if (maxL > max)
-            maxL = max;
-        if (maxL < min)
-            maxL = min;
-
-        minResult = minL;
-        maxResult = maxL;
+        if (val < min)
+        {
+            return min;
+        }
+        else if (val > max)
+        {
+            return max;
+        }
+        else
+        {
+            return val;
+        }
     }
 }

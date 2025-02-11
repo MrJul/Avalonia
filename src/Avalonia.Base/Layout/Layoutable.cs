@@ -551,30 +551,13 @@ namespace Avalonia.Layout
                     availableSize.Deflate(margin));
                 var measured = MeasureOverride(constrained);
 
-                var width = measured.Width;
-                var height = measured.Height;
+                var width = double.IsNaN(minMax.Width) ?
+                    MathUtilities.Clamp(measured.Width, minMax.MinWidth, minMax.MaxWidth) :
+                    minMax.Width;
 
-                {
-                    double widthCache = Width;
-
-                    if (!double.IsNaN(widthCache))
-                    {
-                        width = widthCache;
-                    }
-                }
-
-                width = MathUtilities.Clamp(width, minMax.MinWidth, minMax.MaxWidth);
-
-                {
-                    double heightCache = Height;
-
-                    if (!double.IsNaN(heightCache))
-                    {
-                        height = heightCache;
-                    }
-                }
-
-                height = MathUtilities.Clamp(height, minMax.MinHeight, minMax.MaxHeight);
+                var height = double.IsNaN(minMax.Height) ?
+                    MathUtilities.Clamp(measured.Height, minMax.MinHeight, minMax.MaxHeight) :
+                    minMax.Height;
 
                 if (useLayoutRounding)
                 {
@@ -623,8 +606,13 @@ namespace Avalonia.Layout
                 if (visual is Layoutable layoutable)
                 {
                     layoutable.Measure(availableSize);
-                    width = Math.Max(width, layoutable.DesiredSize.Width);
-                    height = Math.Max(height, layoutable.DesiredSize.Height);
+                    var childSize = layoutable.DesiredSize;
+
+                    if (childSize.Width > width)
+                        width = childSize.Width;
+
+                    if (childSize.Height > height)
+                        height = childSize.Height;
                 }
             }
 
