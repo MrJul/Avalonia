@@ -232,7 +232,8 @@ namespace Avalonia.Controls
         /// <returns>Desired size</returns>
         protected override Size MeasureOverride(Size availableSize)
         {
-            Size stackDesiredSize = new Size();
+            var stackWidth = 0.0;
+            var stackHeight = 0.0;
             var children = Children;
             Size layoutSlotSize = availableSize;
             bool fHorizontal = (Orientation == Orientation.Horizontal);
@@ -261,40 +262,48 @@ namespace Avalonia.Controls
                 // Get next child.
                 var child = children[i];
 
-                bool isVisible = child.IsVisible;
-
-                if (isVisible && !hasVisibleChild)
-                {
-                    hasVisibleChild = true;
-                }
+                var isVisible = child.IsVisible;
+                hasVisibleChild |= isVisible;
 
                 // Measure the child.
                 child.Measure(layoutSlotSize);
-                Size childDesiredSize = child.DesiredSize;
+                var (childWidth, childHeight) = child.DesiredSize;
 
                 // Accumulate child size.
                 if (fHorizontal)
                 {
-                    stackDesiredSize = stackDesiredSize.WithWidth(stackDesiredSize.Width + (isVisible ? spacing : 0) + childDesiredSize.Width);
-                    stackDesiredSize = stackDesiredSize.WithHeight(Math.Max(stackDesiredSize.Height, childDesiredSize.Height));
+                    if (isVisible)
+                        stackWidth += spacing;
+
+                    stackWidth += childWidth;
+
+                    if (childHeight > stackHeight)
+                        stackHeight = childHeight;
                 }
                 else
                 {
-                    stackDesiredSize = stackDesiredSize.WithWidth(Math.Max(stackDesiredSize.Width, childDesiredSize.Width));
-                    stackDesiredSize = stackDesiredSize.WithHeight(stackDesiredSize.Height + (isVisible ? spacing : 0) + childDesiredSize.Height);
+                    if (isVisible)
+                        stackHeight += spacing;
+
+                    stackHeight += childHeight;
+
+                    if (childWidth > stackWidth)
+                        stackWidth = childWidth;
                 }
             }
 
             if (fHorizontal)
             {
-                stackDesiredSize = stackDesiredSize.WithWidth(stackDesiredSize.Width - (hasVisibleChild ? spacing : 0));
+                if (hasVisibleChild)
+                    stackWidth -= spacing;
             }
             else
-            { 
-                stackDesiredSize = stackDesiredSize.WithHeight(stackDesiredSize.Height - (hasVisibleChild ? spacing : 0));
+            {
+                if (hasVisibleChild)
+                    stackHeight -= spacing;
             }
 
-            return stackDesiredSize;
+            return new Size(stackWidth, stackHeight);
         }
 
         /// <summary>
@@ -305,7 +314,8 @@ namespace Avalonia.Controls
         {
             var children = Children;
             bool fHorizontal = (Orientation == Orientation.Horizontal);
-            Rect rcChild = new Rect(finalSize);
+            var x = 0.0;
+            var y = 0.0;
             double previousChildSize = 0.0;
             var spacing = Spacing;
 
@@ -321,38 +331,29 @@ namespace Avalonia.Controls
                     continue;
                 }
 
+                Rect childRect;
+
                 if (fHorizontal)
                 {
-                    rcChild = rcChild.WithX(rcChild.X + previousChildSize);
-                    previousChildSize = child.DesiredSize.Width;
-                    rcChild = rcChild.WithWidth(previousChildSize);
-                    rcChild = rcChild.WithHeight(Math.Max(finalSize.Height, child.DesiredSize.Height));
-                    previousChildSize += spacing;
+                    var childWidth = child.DesiredSize.Width;
+                    childRect = new Rect(x, y, childWidth, Math.Max(finalSize.Height, child.DesiredSize.Height));
+                    x += childWidth;
                 }
                 else
                 {
-                    rcChild = rcChild.WithY(rcChild.Y + previousChildSize);
-                    previousChildSize = child.DesiredSize.Height;
-                    rcChild = rcChild.WithHeight(previousChildSize);
-                    rcChild = rcChild.WithWidth(Math.Max(finalSize.Width, child.DesiredSize.Width));
-                    previousChildSize += spacing;
+                    var childHeight = child.DesiredSize.Height;
+                    childRect = new Rect(x, y, Math.Max(finalSize.Width, child.DesiredSize.Width), childHeight);
+                    y += childHeight;
                 }
 
-                ArrangeChild(child, rcChild, finalSize, Orientation);
+                previousChildSize += spacing;
+
+                child.Arrange(childRect);
             }
 
-            RaiseEvent(new RoutedEventArgs(Orientation == Orientation.Horizontal ? HorizontalSnapPointsChangedEvent : VerticalSnapPointsChangedEvent));
+            RaiseEvent(new RoutedEventArgs(fHorizontal ? HorizontalSnapPointsChangedEvent : VerticalSnapPointsChangedEvent));
 
             return finalSize;
-        }
-
-        internal virtual void ArrangeChild(
-            Control child,
-            Rect rect,
-            Size panelSize,
-            Orientation orientation)
-        {
-            child.Arrange(rect);
         }
 
         /// <inheritdoc/>

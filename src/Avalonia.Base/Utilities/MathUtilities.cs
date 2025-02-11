@@ -166,6 +166,7 @@ namespace Avalonia.Utilities
         /// but this is faster.
         /// </summary>
         /// <param name="value"> The double to compare to 1. </param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsOne(double value)
         {
             return Math.Abs(value - 1.0) < 10.0 * DoubleEpsilon;
@@ -176,6 +177,7 @@ namespace Avalonia.Utilities
         /// but this is faster.
         /// </summary>
         /// <param name="value"> The float to compare to 1. </param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsOne(float value)
         {
             return Math.Abs(value - 1.0f) < 10.0f * FloatEpsilon;
@@ -186,6 +188,7 @@ namespace Avalonia.Utilities
         /// but this is faster.
         /// </summary>
         /// <param name="value"> The double to compare to 0. </param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsZero(double value)
         {
             return Math.Abs(value) < 10.0 * DoubleEpsilon;
@@ -196,6 +199,7 @@ namespace Avalonia.Utilities
         /// but this is faster.
         /// </summary>
         /// <param name="value"> The float to compare to 0. </param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsZero(float value)
         {
             return Math.Abs(value) < 10.0f * FloatEpsilon;
@@ -363,6 +367,28 @@ namespace Avalonia.Utilities
         {
             return GetMinMax(initialValue, initialValue + delta);
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static bool IsNegativeOrNonFinite(double d)
+        {
+#if NET6_0_OR_GREATER
+            ulong bits = BitConverter.DoubleToUInt64Bits(d);
+            return bits >= 0x7FF0_0000_0000_0000;
+#else
+            return d < 0 || !IsFinite(d);
+#endif
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static bool IsFinite(double d)
+        {
+#if NET6_0_OR_GREATER
+            return double.IsFinite(d);
+#else
+                long bits = BitConverter.DoubleToInt64Bits(d);
+                return (bits & 0x7FFF_FFFF_FFFF_FFFF) < 0x7FF0_0000_0000_0000;
+#endif
+        }
         
 #if !BUILDTASK
         internal static int WhichPolygonSideIntersects(
@@ -451,7 +477,7 @@ namespace Avalonia.Utilities
             return true;
         }
 #endif
-        
+
         private static void ThrowCannotBeGreaterThanException<T>(T min, T max)
         {
             throw new ArgumentException($"{min} cannot be greater than {max}.");

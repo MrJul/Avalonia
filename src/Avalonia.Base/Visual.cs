@@ -145,6 +145,8 @@ namespace Avalonia
         /// </summary>
         public Visual()
         {
+            _visualRoot = this as IRenderRoot;
+
             // Disable transitions until we're added to the visual tree.
             DisableTransitions();
 
@@ -323,7 +325,7 @@ namespace Avalonia
         /// <summary>
         /// Gets the root of the visual tree, if the control is attached to a visual tree.
         /// </summary>
-        protected internal IRenderRoot? VisualRoot => _visualRoot ?? (this as IRenderRoot);
+        protected internal IRenderRoot? VisualRoot => _visualRoot;
 
         internal RenderOptions RenderOptions { get; set; }
 

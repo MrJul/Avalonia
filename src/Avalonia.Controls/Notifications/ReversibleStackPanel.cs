@@ -48,14 +48,14 @@ namespace Avalonia.Controls
                 {
                     var rect = new Rect(0, pos, childWidth, childHeight)
                         .Align(finalRect, child.HorizontalAlignment, VerticalAlignment.Top);
-                    ArrangeChild(child, rect, finalSize, orientation);
+                    child.Arrange(rect);
                     pos += childHeight + spacing;
                 }
                 else
                 {
                     var rect = new Rect(pos, 0, childWidth, childHeight)
                         .Align(finalRect, HorizontalAlignment.Left, child.VerticalAlignment);
-                    ArrangeChild(child, rect, finalSize, orientation);
+                    child.Arrange(rect);
                     pos += childWidth + spacing;
                 }
             }
