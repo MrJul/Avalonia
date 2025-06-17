@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 
@@ -45,10 +46,23 @@ namespace Avalonia.Input
         /// Starts a dragging operation with the given <see cref="IDataObject"/> and returns the applied drop effect from the target.
         /// <seealso cref="DataObject"/>
         /// </summary>
+        [Obsolete($"Use {nameof(DoDragDropAsync)} instead.")]
         public static Task<DragDropEffects> DoDragDrop(PointerEventArgs triggerEvent, IDataObject data, DragDropEffects allowedEffects)
         {
+            return DoDragDropAsync(triggerEvent, new DataObjectToDataTransferWrapper(data), allowedEffects);
+        }
+
+        /// <summary>
+        /// Starts a dragging operation with the given <see cref="IDataTransfer"/> and returns the applied drop effect from the target.
+        /// <seealso cref="DataTransfer"/>
+        /// </summary>
+        public static Task<DragDropEffects> DoDragDropAsync(
+            PointerEventArgs triggerEvent,
+            IDataTransfer dataTransfer,
+            DragDropEffects allowedEffects)
+        {
             var src = AvaloniaLocator.Current.GetService<IPlatformDragSource>();
-            return src?.DoDragDrop(triggerEvent, data, allowedEffects) ?? Task.FromResult(DragDropEffects.None);
+            return src?.DoDragDropAsync(triggerEvent, dataTransfer, allowedEffects) ?? Task.FromResult(DragDropEffects.None);
         }
     }
 }

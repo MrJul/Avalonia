@@ -1,8 +1,6 @@
 using System;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Reactive;
 using Avalonia.Threading;
@@ -11,12 +9,12 @@ using MicroCom.Runtime;
 
 namespace Avalonia.Win32
 {
-    internal class ClipboardImpl : IClipboard
+    internal sealed class ClipboardImpl : IOwnedClipboardImpl, IFlushableClipboardImpl
     {
         private const int OleRetryCount = 10;
         private const int OleRetryDelay = 100;
 
-        private DataObject? _lastStoredDataObject;
+        private DataTransferToOleDataObjectWrapper? _lastStoredDataObject;
         // We can't currently rely on GetNativeIntPtr due to a bug in MicroCom 0.11, so we store the raw CCW reference instead
         private IntPtr _lastStoredDataObjectIntPtr;
 
@@ -28,7 +26,7 @@ namespace Avalonia.Win32
         /// </remarks>
         private const int OleFlushDelay = 10;
 
-        private static async Task<IDisposable> OpenClipboard()
+        private static async Task<IDisposable> OpenClipboardAsync()
         {
             var i = OleRetryCount;
 
@@ -44,7 +42,7 @@ namespace Avalonia.Win32
 
         public async Task<string?> GetTextAsync()
         {
-            using (await OpenClipboard())
+            using (await OpenClipboardAsync())
             {
                 IntPtr hText = UnmanagedMethods.GetClipboardData(UnmanagedMethods.ClipboardFormat.CF_UNICODETEXT);
                 if (hText == IntPtr.Zero)
@@ -66,7 +64,7 @@ namespace Avalonia.Win32
 
         public async Task SetTextAsync(string? text)
         {
-            using (await OpenClipboard())
+            using (await OpenClipboardAsync())
             {
                 UnmanagedMethods.EmptyClipboard();
 
@@ -80,16 +78,23 @@ namespace Avalonia.Win32
 
         public async Task ClearAsync()
         {
-            using (await OpenClipboard())
+            using (await OpenClipboardAsync())
             {
                 UnmanagedMethods.EmptyClipboard();
+                ClearLastStoredObject();
             }
         }
 
-        public async Task SetDataObjectAsync(IDataObject data)
+        private void ClearLastStoredObject()
+        {
+            _lastStoredDataObject = null;
+            _lastStoredDataObjectIntPtr = IntPtr.Zero;
+        }
+
+        public async Task SetDataTransferAsync(IAsyncDataTransfer dataTransfer)
         {
             Dispatcher.UIThread.VerifyAccess();
-            using var wrapper = new DataObject(data);
+            using var wrapper = new DataTransferToOleDataObjectWrapper(dataTransfer.ToSynchronous());
             var i = OleRetryCount;
 
             while (true)
@@ -106,7 +111,7 @@ namespace Avalonia.Win32
                     wrapper.OnDestroyed += delegate
                     {
                         if (_lastStoredDataObjectIntPtr == ptr)
-                            _lastStoredDataObjectIntPtr = IntPtr.Zero;
+                            ClearLastStoredObject();
                     };
                     break;
                 }
@@ -118,7 +123,7 @@ namespace Avalonia.Win32
             }
         }
 
-        public async Task<string[]> GetFormatsAsync()
+        public async Task<DataFormat[]> GetFormatsAsync()
         {
             Dispatcher.UIThread.VerifyAccess();
             var i = OleRetryCount;
@@ -130,9 +135,8 @@ namespace Avalonia.Win32
                 if (hr == 0)
                 {
                     using var proxy = MicroComRuntime.CreateProxyFor<Win32Com.IDataObject>(dataObject, true);
-                    using var wrapper = new OleDataObject(proxy);
-                    var formats = wrapper.GetDataFormats().ToArray();
-                    return formats;
+                    using var wrapper = new OleDataObjectToDataTransferWrapper(proxy);
+                    return wrapper.GetFormats();
                 }
 
                 if (--i == 0)
@@ -142,7 +146,7 @@ namespace Avalonia.Win32
             }
         }
 
-        public async Task<object?> GetDataAsync(string format)
+        public async Task<object?> TryGetDataAsync(DataFormat format)
         {
             Dispatcher.UIThread.VerifyAccess();
             var i = OleRetryCount;
@@ -154,9 +158,8 @@ namespace Avalonia.Win32
                 if (hr == 0)
                 {
                     using var proxy = MicroComRuntime.CreateProxyFor<Win32Com.IDataObject>(dataObject, true);
-                    using var wrapper = new OleDataObject(proxy);
-                    var rv = wrapper.Get(format);
-                    return rv;
+                    using var wrapper = new OleDataObjectToDataTransferWrapper(proxy);
+                    return wrapper.TryGet(format);
                 }
 
                 if (--i == 0)
@@ -166,19 +169,19 @@ namespace Avalonia.Win32
             }
         }
 
-
-        public Task<IDataObject?> TryGetInProcessDataObjectAsync()
+        public Task<bool> IsCurrentOwnerAsync()
         {
-            if (_lastStoredDataObject?.IsDisposed != false
-                || _lastStoredDataObjectIntPtr == IntPtr.Zero
-                || UnmanagedMethods.OleIsCurrentClipboard(_lastStoredDataObjectIntPtr) != 0)
-                return Task.FromResult<IDataObject?>(null);
-            
-            return Task.FromResult<IDataObject?>(_lastStoredDataObject.Wrapped);
+            var isCurrent =
+                _lastStoredDataObject is { IsDisposed: false } &&
+                _lastStoredDataObjectIntPtr != IntPtr.Zero &&
+                UnmanagedMethods.OleIsCurrentClipboard(_lastStoredDataObjectIntPtr) == (int)UnmanagedMethods.HRESULT.S_OK;
+
+            if (!isCurrent)
+                ClearLastStoredObject();
+
+            return Task.FromResult(isCurrent);
         }
-        /// <summary>
-        /// Permanently renders the contents of the last IDataObject that was set onto the clipboard.
-        /// </summary>
+
         public async Task FlushAsync()
         {
             await Task.Delay(OleFlushDelay);
