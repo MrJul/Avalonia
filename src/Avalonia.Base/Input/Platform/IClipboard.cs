@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Metadata;
 
@@ -10,18 +11,19 @@ namespace Avalonia.Input.Platform
     [NotClientImplementable]
     public interface IClipboard
     {
-        // TODO12: remove and convert to a TryGetTextAsync extension method based on TryGetDataAsync()
+        // TODO12: remove, ClipboardExtensions.TryGetTextAsync exists
         /// <summary>
         /// Returns a string containing the text data on the clipboard.
         /// </summary>
         /// <returns>A string containing text data, or null if no corresponding text data is available.</returns>
+        [Obsolete($"Use {nameof(ClipboardExtensions)}.{nameof(ClipboardExtensions.TryGetTextAsync)} instead")]
         Task<string?> GetTextAsync();
 
-        // TODO12: remove and convert to a SetGetTextAsync extension method based on SetDataTransferAsync()
+        // TODO12: remove, ClipboardExtensions.SetTextAsync exists
         /// <summary>
         /// Places a text on the clipboard.
         /// </summary>
-        /// <param name="text">The text data to set.</param>
+        /// <param name="text">The text value to set.</param>
         /// <remarks>
         /// <para>By calling this method, the clipboard will get cleared of any possible previous data.</para>
         /// <para>
@@ -41,7 +43,7 @@ namespace Avalonia.Input.Platform
         /// </summary>
         /// <param name="data">A data object (an object that implements <see cref="IDataObject"/>) to place on the system Clipboard.</param>
         /// <exception cref="System.ArgumentNullException"><paramref name="data"/> is null.</exception>
-        [Obsolete($"Use {nameof(SetDataTransferAsync)} instead.")]
+        [Obsolete($"Use {nameof(SetDataAsync)} instead.")]
         Task SetDataObjectAsync(IDataObject data);
 
         /// <summary>
@@ -50,10 +52,16 @@ namespace Avalonia.Input.Platform
         /// </summary>
         /// <param name="dataTransfer">The data object to set on the clipboard.</param>
         /// <remarks>
+        /// <para>
         /// If <paramref name="dataTransfer"/> is null, nothing will get placed on the clipboard and this method
         /// will be equivalent to <see cref="ClearAsync"/>.
+        /// </para>
+        /// <para>
+        /// The <see cref="IDataTransfer3"/> must NOT be disposed by the caller after this call.
+        /// The clipboard will dispose of it automatically when it becomes unused.
+        /// </para>
         /// </remarks>
-        Task SetDataTransferAsync(IAsyncDataTransfer? dataTransfer);
+        Task SetDataAsync(IDataTransfer3? dataTransfer);
 
         /// <summary>
         /// Permanently adds the data that is on the Clipboard so that it is available after the data's original application closes.
@@ -83,12 +91,17 @@ namespace Avalonia.Input.Platform
         Task<object?> GetDataAsync(string format);
 
         /// <summary>
-        /// Retrieves data from the clipboard in the specified format.
+        /// Retrieves data from the clipboard matching one or more formats.
         /// </summary>
-        /// <param name="format">The requested format.</param>
-        /// <returns>A value corresponding to <paramref name="format"/>, or null if the clipboard doesn't contain the specified format.</returns>
-        Task<object?> TryGetDataAsync(DataFormat format);
-        
+        /// <param name="formats">The requested formats.</param>
+        /// <returns>
+        /// If at least one format specified by <paramref name="formats"/> was present on the clipboard, returns an
+        /// <see cref="IDataTransfer3"/> containing the matching items (each returned item matches at least one format).
+        /// Otherwise, returns null.
+        /// </returns>
+        /// <remarks>The returned <see cref="IDataTransfer3"/> MUST be disposed by the caller.</remarks>
+        Task<IDataTransfer3?> TryGetDataAsync(IEnumerable<DataFormat> formats);
+
         /// <summary>
         /// If clipboard contains the IDataObject that was set by a previous call to <see cref="SetDataObjectAsync(Avalonia.Input.IDataObject)"/>,
         /// return said IDataObject instance. Otherwise, return null.
@@ -100,13 +113,13 @@ namespace Avalonia.Input.Platform
         Task<IDataObject?> TryGetInProcessDataObjectAsync();
 
         /// <summary>
-        /// Retrieves a <see cref="IAsyncDataTransfer"/> previously placed on the clipboard by <see cref="SetDataTransferAsync"/>, if any.
+        /// Retrieves a <see cref="IDataTransfer3"/> previously placed on the clipboard by <see cref="SetDataAsync"/>, if any.
         /// </summary>
         /// <returns>The data object if present, null otherwise.</returns>
         /// <remarks>
-        /// <para>This method cannot be used to retrieve a <see cref="IAsyncDataTransfer"/> set by another process.</para>
+        /// <para>This method cannot be used to retrieve a <see cref="IDataTransfer3"/> set by another process.</para>
         /// <para>This method is only supported on Windows, macOS and X11 platforms. Other platforms will always return null.</para>
         /// </remarks>
-        Task<IAsyncDataTransfer?> TryGetInProcessDataTransferAsync();
+        Task<IDataTransfer3?> TryGetInProcessDataTransferAsync();
     }
 }

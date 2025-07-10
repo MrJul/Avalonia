@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia.Input.Platform;
@@ -40,42 +42,6 @@ namespace Avalonia.Win32
             return Disposable.Create(() => UnmanagedMethods.CloseClipboard());
         }
 
-        public async Task<string?> GetTextAsync()
-        {
-            using (await OpenClipboardAsync())
-            {
-                IntPtr hText = UnmanagedMethods.GetClipboardData(UnmanagedMethods.ClipboardFormat.CF_UNICODETEXT);
-                if (hText == IntPtr.Zero)
-                {
-                    return null;
-                }
-
-                var pText = UnmanagedMethods.GlobalLock(hText);
-                if (pText == IntPtr.Zero)
-                {
-                    return null;
-                }
-
-                var rv = Marshal.PtrToStringUni(pText);
-                UnmanagedMethods.GlobalUnlock(hText);
-                return rv;
-            }
-        }
-
-        public async Task SetTextAsync(string? text)
-        {
-            using (await OpenClipboardAsync())
-            {
-                UnmanagedMethods.EmptyClipboard();
-
-                if (text is not null)
-                {
-                    var hGlobal = Marshal.StringToHGlobalUni(text);
-                    UnmanagedMethods.SetClipboardData(UnmanagedMethods.ClipboardFormat.CF_UNICODETEXT, hGlobal);
-                }
-            }
-        }
-
         public async Task ClearAsync()
         {
             using (await OpenClipboardAsync())
@@ -91,10 +57,10 @@ namespace Avalonia.Win32
             _lastStoredDataObjectIntPtr = IntPtr.Zero;
         }
 
-        public async Task SetDataTransferAsync(IAsyncDataTransfer dataTransfer)
+        public async Task SetDataAsync(IDataTransfer3 dataTransfer)
         {
             Dispatcher.UIThread.VerifyAccess();
-            using var wrapper = new DataTransferToOleDataObjectWrapper(dataTransfer.ToSynchronous());
+            using var wrapper = new DataTransferToOleDataObjectWrapper(dataTransfer);
             var i = OleRetryCount;
 
             while (true)
@@ -123,7 +89,7 @@ namespace Avalonia.Win32
             }
         }
 
-        public async Task<DataFormat[]> GetFormatsAsync()
+        public async Task<DataFormat[]> GetDataFormatsAsync()
         {
             Dispatcher.UIThread.VerifyAccess();
             var i = OleRetryCount;
@@ -136,7 +102,7 @@ namespace Avalonia.Win32
                 {
                     using var proxy = MicroComRuntime.CreateProxyFor<Win32Com.IDataObject>(dataObject, true);
                     using var wrapper = new OleDataObjectToDataTransferWrapper(proxy);
-                    return wrapper.GetFormats();
+                    return wrapper.GetFormats().ToArray();
                 }
 
                 if (--i == 0)
@@ -146,7 +112,7 @@ namespace Avalonia.Win32
             }
         }
 
-        public async Task<object?> TryGetDataAsync(DataFormat format)
+        public async Task<IDataTransfer3?> TryGetDataAsync(IEnumerable<DataFormat> formats)
         {
             Dispatcher.UIThread.VerifyAccess();
             var i = OleRetryCount;
@@ -158,8 +124,24 @@ namespace Avalonia.Win32
                 if (hr == 0)
                 {
                     using var proxy = MicroComRuntime.CreateProxyFor<Win32Com.IDataObject>(dataObject, true);
-                    using var wrapper = new OleDataObjectToDataTransferWrapper(proxy);
-                    return wrapper.TryGet(format);
+                    var wrapper = new OleDataObjectToDataTransferWrapper(proxy);
+
+                    try
+                    {
+                        foreach (var format in formats)
+                        {
+                            if (wrapper.Contains(format))
+                                return wrapper; // Ownership returned to the caller
+                        }
+                    }
+                    catch
+                    {
+                        wrapper.Dispose();
+                        throw;
+                    }
+
+                    wrapper.Dispose();
+                    return null;
                 }
 
                 if (--i == 0)

@@ -40,7 +40,7 @@ namespace Avalonia.Native
 
         public Task<DragDropEffects> DoDragDropAsync(
             PointerEventArgs triggerEvent,
-            IDataTransfer dataTransfer,
+            IDataTransfer3 dataTransfer,
             DragDropEffects allowedEffects)
         {
             // Sanity check
@@ -57,7 +57,7 @@ namespace Avalonia.Native
             using (var clipboard = new ClipboardImpl(clipboardImpl))
             using (var cb = new DndCallback(tcs))
             {
-                clipboard.SetDataTransfer(dataTransfer);
+                clipboard.SetData(dataTransfer);
 
                 view.BeginDraggingSession((AvnDragDropEffects)allowedEffects,
                     triggerEvent.GetPosition(tl).ToAvnPoint(), clipboardImpl, cb,

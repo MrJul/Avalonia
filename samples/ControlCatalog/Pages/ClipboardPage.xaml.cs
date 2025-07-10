@@ -59,7 +59,7 @@ namespace ControlCatalog.Pages
             {
                 var dataTransfer =  _storedDataTransfer = new DataTransfer();
                 dataTransfer.Set(DataFormat.Text, ClipboardContent.Text ?? string.Empty);
-                await clipboard.SetDataTransferAsync(dataTransfer);
+                await clipboard.SetDataAsync(dataTransfer);
             }
         }
 
@@ -107,7 +107,7 @@ namespace ControlCatalog.Pages
                 {
                     var dataTransfer = _storedDataTransfer = new DataTransfer();
                     dataTransfer.Set(DataFormat.Files, files);
-                    await clipboard.SetDataTransferAsync(dataTransfer);
+                    await clipboard.SetDataAsync(dataTransfer);
                     NotificationManager.Show(new Notification("Success", "Copy completated.", NotificationType.Success));
                 }
                 else

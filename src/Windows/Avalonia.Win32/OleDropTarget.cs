@@ -16,7 +16,7 @@ namespace Avalonia.Win32
         private readonly ITopLevelImpl _topLevel;
         private readonly IDragDropDevice _dragDevice;
         
-        private IDataTransfer? _currentDrag;
+        private IDataTransfer3? _currentDrag;
 
         public OleDropTarget(ITopLevelImpl topLevel, IInputRoot target, IDragDropDevice dragDevice)
         {
@@ -217,7 +217,7 @@ namespace Avalonia.Win32
             ReleaseDataObject();
         }
 
-        public static IDataTransfer? TryGetDataTransferFromOleDataObject(Win32Com.IDataObject pDataObj)
+        public static IDataTransfer3? TryGetDataTransferFromOleDataObject(Win32Com.IDataObject pDataObj)
         {
             ThrowHelper.ThrowIfNull(pDataObj);
 

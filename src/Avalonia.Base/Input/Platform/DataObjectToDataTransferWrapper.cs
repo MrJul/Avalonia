@@ -1,27 +1,28 @@
-﻿using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Avalonia.Input.Platform;
 
 // TODO12: remove
 /// <summary>
-/// Wraps a legacy <see cref="IDataObject"/> into a <see cref="IDataTransfer"/>.
+/// Wraps a legacy <see cref="IDataObject"/> into a <see cref="IDataTransfer3"/>.
 /// </summary>
-internal sealed class DataObjectToDataTransferWrapper(IDataObject dataObject) : IAsyncDataTransfer, IDataTransfer
+internal sealed class DataObjectToDataTransferWrapper(IDataObject dataObject)
+    : IDataTransfer3, IDataTransferItem
 {
     public IDataObject DataObject { get; } = dataObject;
 
-    public DataFormat[] GetFormats()
-        => DataObject.GetDataFormats().Select(DataFormat.Parse).ToArray();
+    IEnumerable<IDataTransferItem> IDataTransfer3.GetItems()
+        => [this];
 
-    public Task<DataFormat[]> GetFormatsAsync()
-        => Task.FromResult(GetFormats());
+    public IEnumerable<DataFormat> GetFormats()
+        => DataObject.GetDataFormats().Select(DataFormat.Parse);
 
     public bool Contains(DataFormat format)
         => DataObject.Contains(format.SystemName);
-
-    public Task<bool> ContainsAsync(DataFormat format)
-        => Task.FromResult(Contains(format));
 
     public object? TryGet(DataFormat format)
     {
@@ -31,4 +32,8 @@ internal sealed class DataObjectToDataTransferWrapper(IDataObject dataObject) : 
 
     public Task<object?> TryGetAsync(DataFormat format)
         => Task.FromResult(TryGet(format));
+
+    [SuppressMessage("ReSharper", "SuspiciousTypeConversion.Global", Justification = "IDataObject may be implemented externally.")]
+    public void Dispose()
+        => (DataObject as IDisposable)?.Dispose();
 }

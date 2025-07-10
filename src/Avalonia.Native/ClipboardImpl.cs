@@ -43,7 +43,7 @@ namespace Avalonia.Native
             return Task.CompletedTask;
         }
 
-        public Task<DataFormat[]> GetFormatsAsync()
+        public Task<DataFormat[]> GetDataFormatsAsync()
             => Task.FromResult(GetFormats());
 
         public DataFormat[] GetFormats()
@@ -132,33 +132,39 @@ namespace Avalonia.Native
             return GetBytes(format);
         }
 
-        public Task<object?> TryGetDataAsync(DataFormat format)
-            => Task.FromResult(TryGetData(format));
-
-        public async Task SetDataTransferAsync(IAsyncDataTransfer dataTransfer)
+        public Task<IDataTransfer3?> TryGetDataAsync(IEnumerable<DataFormat> formats)
         {
-            ClearCore();
-
-            var formats = await dataTransfer.GetFormatsAsync();
-
-            foreach (var format in formats)
-            {
-                if (await dataTransfer.TryGetAsync(format) is { } value)
-                    SetData(value, format);
-            }
+            throw new NotImplementedException();
         }
 
-        public void SetDataTransfer(IDataTransfer dataTransfer)
+        public Task SetDataAsync(IDataTransfer3 dataTransfer)
         {
             ClearCore();
 
-            var formats = dataTransfer.GetFormats();
+            throw new NotImplementedException();
 
-            foreach (var format in formats)
-            {
-                if (dataTransfer.TryGet(format) is { } value)
-                    SetData(value, format);
-            }
+            // var formats = await dataTransfer.GetFormatsAsync();
+            //
+            // foreach (var format in formats)
+            // {
+            //     if (await dataTransfer.TryGetAsync(format) is { } value)
+            //         SetData(value, format);
+            // }
+        }
+
+        public void SetData(IDataTransfer3 dataTransfer)
+        {
+            ClearCore();
+
+            throw new NotImplementedException();
+
+            // var formats = dataTransfer.GetFormats();
+            //
+            // foreach (var format in formats)
+            // {
+            //     if (dataTransfer.TryGet(format) is { } value)
+            //         SetData(value, format);
+            // }
         }
 
         private void SetData(object data, DataFormat format)

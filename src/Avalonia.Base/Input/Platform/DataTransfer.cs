@@ -1,44 +1,22 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Avalonia.Input.Platform;
 
 /// <summary>
-/// Mutable implementation of <see cref="IDataTransfer"/> and <see cref="IAsyncDataTransfer"/>.
+/// A mutable implementation of <see cref="IDataTransfer3"/>.
 /// </summary>
-/// <remarks>The <see cref="IAsyncDataTransfer"/> implementations in this class are synchronous.</remarks>
-public sealed class DataTransfer : IDataTransfer, IAsyncDataTransfer
+public sealed class DataTransfer : IDataTransfer3
 {
-    private readonly Dictionary<DataFormat, object> _items = new();
+    /// <summary>
+    /// Gets the list of <see cref="IDataTransferItem"/> contained in this object.
+    /// </summary>
+    public List<IDataTransferItem> Items { get; } = [];
 
-    /// <inheritdoc />
-    public DataFormat[] GetFormats()
-        => _items.Keys.ToArray();
+    IEnumerable<IDataTransferItem> IDataTransfer3.GetItems()
+        => Items;
 
-    /// <inheritdoc />
-    public Task<DataFormat[]> GetFormatsAsync()
-        => Task.FromResult(GetFormats());
-
-    /// <inheritdoc />
-    public bool Contains(DataFormat format)
-        => _items.ContainsKey(format);
-
-    /// <inheritdoc />
-    public Task<bool> ContainsAsync(DataFormat format)
-        => Task.FromResult(TryGet(format) is not null);
-
-    /// <inheritdoc />
-    public object? TryGet(DataFormat format)
+    void IDisposable.Dispose()
     {
-        _items.TryGetValue(format, out var item);
-        return item;
     }
-
-    /// <inheritdoc />
-    public Task<object?> TryGetAsync(DataFormat format)
-        => Task.FromResult(TryGet(format));
-
-    public void Set(DataFormat format, object value)
-        => _items[format] = value;
 }
