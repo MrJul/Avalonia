@@ -17,7 +17,7 @@ namespace Avalonia.Win32
 
         public Task<DragDropEffects> DoDragDropAsync(
             PointerEventArgs triggerEvent,
-            IDataTransfer dataTransfer,
+            IDataTransfer3 dataTransfer,
             DragDropEffects allowedEffects)
         {
             Dispatcher.UIThread.VerifyAccess();
@@ -34,7 +34,7 @@ namespace Avalonia.Win32
             UnmanagedMethods.DoDragDrop(objPtr, srcPtr, (int)allowed, out var finalEffect);
             
             // Force releasing of internal wrapper to avoid memory leak, if drop target keeps com reference.
-            dataObject.ReleaseWrapped();
+            dataObject.ReleaseDataTransfer();
 
             return Task.FromResult(OleDropTarget.ConvertDropEffect((Win32Com.DropEffect)finalEffect));
         }

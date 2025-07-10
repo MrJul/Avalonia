@@ -1,13 +1,24 @@
-﻿using System.Threading.Tasks;
+﻿using System.Collections.Generic;
+using System.Threading.Tasks;
 using Avalonia.Metadata;
 
 namespace Avalonia.Input.Platform;
 
+/// <summary>
+/// Represents a platform-specific implementation of the clipboard.
+/// </summary>
 [PrivateApi]
 public interface IClipboardImpl
 {
-    Task<DataFormat[]> GetFormatsAsync();
-    Task<object?> TryGetDataAsync(DataFormat format);
-    Task SetDataTransferAsync(IAsyncDataTransfer dataTransfer);
+    /// <inheritdoc cref="IClipboard.GetDataFormatsAsync"/>
+    Task<DataFormat[]> GetDataFormatsAsync();
+
+    /// <inheritdoc cref="IClipboard.TryGetDataAsync"/>
+    Task<IDataTransfer3?> TryGetDataAsync(IEnumerable<DataFormat> formats);
+
+    /// <inheritdoc cref="IClipboard.SetDataAsync"/>
+    Task SetDataAsync(IDataTransfer3 dataTransfer);
+
+    /// <inheritdoc cref="IClipboard.ClearAsync"/>
     Task ClearAsync();
 }

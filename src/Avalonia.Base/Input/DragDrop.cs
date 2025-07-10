@@ -53,16 +53,21 @@ namespace Avalonia.Input
         }
 
         /// <summary>
-        /// Starts a dragging operation with the given <see cref="IDataTransfer"/> and returns the applied drop effect from the target.
+        /// Starts a dragging operation with the given <see cref="IDataTransfer3"/> and returns the applied drop effect from the target.
         /// <seealso cref="DataTransfer"/>
         /// </summary>
         public static Task<DragDropEffects> DoDragDropAsync(
             PointerEventArgs triggerEvent,
-            IDataTransfer dataTransfer,
+            IDataTransfer3 dataTransfer,
             DragDropEffects allowedEffects)
         {
-            var src = AvaloniaLocator.Current.GetService<IPlatformDragSource>();
-            return src?.DoDragDropAsync(triggerEvent, dataTransfer, allowedEffects) ?? Task.FromResult(DragDropEffects.None);
+            if (AvaloniaLocator.Current.GetService<IPlatformDragSource>() is not { } dragSource)
+            {
+                dataTransfer.Dispose();
+                return Task.FromResult(DragDropEffects.None);
+            }
+
+            return dragSource.DoDragDropAsync(triggerEvent, dataTransfer, allowedEffects);
         }
     }
 }

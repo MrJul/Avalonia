@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
+using System.Threading.Tasks;
 using Avalonia.Input.Platform;
 using MicroCom.Runtime;
 using static Avalonia.Win32.Interop.UnmanagedMethods;
@@ -13,14 +14,18 @@ using STGMEDIUM = Avalonia.Win32.Interop.UnmanagedMethods.STGMEDIUM;
 namespace Avalonia.Win32;
 
 /// <summary>
-/// Wraps a Win32 <see cref="Win32Com.IDataObject"/> into a <see cref="IDataTransfer"/>.
+/// Wraps a Win32 <see cref="Win32Com.IDataObject"/> into a <see cref="IDataTransfer3"/>.
 /// </summary>
-/// <param name="oleDataObject">The wrapped object.</param>
-internal sealed class OleDataObjectToDataTransferWrapper(Win32Com.IDataObject oleDataObject) : IDataTransfer, IDisposable
+/// <param name="oleDataObject">The wrapped OLE data object.</param>
+internal sealed class OleDataObjectToDataTransferWrapper(Win32Com.IDataObject oleDataObject)
+    : IDataTransfer3, IDataTransferItem
 {
     private readonly Win32Com.IDataObject _oleDataObject = oleDataObject.CloneReference();
 
-    private IEnumerable<DataFormat> EnumerateFormats()
+    IEnumerable<IDataTransferItem> IDataTransfer3.GetItems()
+        => [this];
+
+    public IEnumerable<DataFormat> GetFormats()
     {
         if (_oleDataObject.EnumFormatEtc((int)DATADIR.DATADIR_GET) is not { } enumFormat)
             yield break;
@@ -48,19 +53,8 @@ internal sealed class OleDataObjectToDataTransferWrapper(Win32Com.IDataObject ol
         }
     }
 
-    public DataFormat[] GetFormats()
-        => EnumerateFormats().ToArray();
-
     public bool Contains(DataFormat format)
-    {
-        foreach (var fmt in EnumerateFormats())
-        {
-            if (fmt.Equals(format))
-                return true;
-        }
-
-        return false;
-    }
+        => GetFormats().Contains(format);
 
     public unsafe object? TryGet(DataFormat format)
     {
@@ -88,6 +82,9 @@ internal sealed class OleDataObjectToDataTransferWrapper(Win32Com.IDataObject ol
 
         return null;
     }
+
+    Task<object?> IDataTransferItem.TryGetAsync(DataFormat format)
+        => Task.FromResult(TryGet(format));
 
     public void Dispose()
         => _oleDataObject.Dispose();

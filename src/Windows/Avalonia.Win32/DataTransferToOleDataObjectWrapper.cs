@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -12,10 +13,11 @@ using STGMEDIUM = Avalonia.Win32.Interop.UnmanagedMethods.STGMEDIUM;
 namespace Avalonia.Win32;
 
 /// <summary>
-/// Wrapping an Avalonia <see cref="IDataTransfer"/> into a Win32 <see cref="Win32Com.IDataObject"/>.
+/// Wraps an Avalonia <see cref="IDataTransfer3"/> into a Win32 <see cref="Win32Com.IDataObject"/>.
 /// </summary>
 /// <param name="dataTransfer">The wrapped data transfer instance.</param>
-internal class DataTransferToOleDataObjectWrapper(IDataTransfer dataTransfer) : CallbackBase, Win32Com.IDataObject
+internal class DataTransferToOleDataObjectWrapper(IDataTransfer3 dataTransfer)
+    : CallbackBase, Win32Com.IDataObject
 {
     private class FormatEnumerator : CallbackBase, Win32Com.IEnumFORMATETC
     {
@@ -28,7 +30,7 @@ internal class DataTransferToOleDataObjectWrapper(IDataTransfer dataTransfer) : 
             _current = current;
         }
 
-        public FormatEnumerator(DataFormat[] dataFormats)
+        public FormatEnumerator(IEnumerable<DataFormat> dataFormats)
         {
             _formats = dataFormats.Select(OleDataObjectHelper.ToFormatEtc).ToArray();
             _current = 0;
@@ -75,7 +77,7 @@ internal class DataTransferToOleDataObjectWrapper(IDataTransfer dataTransfer) : 
         }
     }
 
-    public IDataTransfer? DataTransfer { get; private set; } = dataTransfer;
+    public IDataTransfer3? DataTransfer { get; private set; } = dataTransfer;
 
     public bool IsDisposed
         => DataTransfer is null;
@@ -107,11 +109,11 @@ internal class DataTransferToOleDataObjectWrapper(IDataTransfer dataTransfer) : 
 
     unsafe uint Win32Com.IDataObject.GetData(FORMATETC* format, STGMEDIUM* medium)
     {
-        if (!ValidateFormat(format, out var result))
+        if (!ValidateFormat(format, out var result, out var dataFormat))
             return result;
 
-        var dataFormat = ClipboardFormatRegistry.GetFormatById(format->cfFormat);
-        if (DataTransfer.TryGet(dataFormat) is not { } data)
+        var data = DataTransfer.TryGetAsync<object?>(dataFormat).GetAwaiter().GetResult();
+        if (data is null)
             return DV_E_FORMATETC;
 
         *medium = default;
@@ -121,14 +123,14 @@ internal class DataTransferToOleDataObjectWrapper(IDataTransfer dataTransfer) : 
 
     unsafe uint Win32Com.IDataObject.GetDataHere(FORMATETC* format, STGMEDIUM* medium)
     {
-        if (!ValidateFormat(format, out var result))
+        if (!ValidateFormat(format, out var result, out var dataFormat))
             return result;
 
         if (medium->unionmember == IntPtr.Zero)
             return STG_E_MEDIUMFULL;
 
-        var dataFormat = ClipboardFormatRegistry.GetFormatById(format->cfFormat);
-        if (DataTransfer.TryGet(dataFormat) is not { } data)
+        var data = DataTransfer.TryGetAsync<object?>(dataFormat).GetAwaiter().GetResult();
+        if (data is null)
             return DV_E_FORMATETC;
 
         return OleDataObjectHelper.WriteDataToHGlobal(data, dataFormat, ref medium->unionmember);
@@ -136,22 +138,21 @@ internal class DataTransferToOleDataObjectWrapper(IDataTransfer dataTransfer) : 
 
     unsafe uint Win32Com.IDataObject.QueryGetData(FORMATETC* format)
     {
-        if (!ValidateFormat(format, out var result))
+        if (!ValidateFormat(format, out var result, out _))
             return result;
-
-        var dataFormat = ClipboardFormatRegistry.GetFormatById(format->cfFormat);
-        if (!DataTransfer.Contains(dataFormat))
-            return DV_E_FORMATETC;
 
         return (uint)HRESULT.S_OK;
     }
 
     [MemberNotNullWhen(true, nameof(DataTransfer))]
-    private unsafe bool ValidateFormat(FORMATETC* format, out uint result)
+    private unsafe bool ValidateFormat(FORMATETC* format, out uint result, [NotNullWhen(true)] out DataFormat? dataFormat)
     {
+        dataFormat = null;
+
         if (!format->tymed.HasAllFlags(TYMED.TYMED_HGLOBAL))
         {
             result = DV_E_TYMED;
+            dataFormat = null;
             return false;
         }
 
@@ -167,6 +168,13 @@ internal class DataTransferToOleDataObjectWrapper(IDataTransfer dataTransfer) : 
             return false;
         }
 
+        dataFormat = ClipboardFormatRegistry.GetFormatById(format->cfFormat);
+        if (!DataTransfer.Contains(dataFormat))
+        {
+            result = DV_E_FORMATETC;
+            return false;
+        }
+
         result = (uint)HRESULT.S_OK;
         return true;
     }
@@ -177,9 +185,12 @@ internal class DataTransferToOleDataObjectWrapper(IDataTransfer dataTransfer) : 
     protected override void Destroyed()
     {
         OnDestroyed?.Invoke();
-        ReleaseWrapped();
+        ReleaseDataTransfer();
     }
 
-    public void ReleaseWrapped()
-        => DataTransfer = null;
+    public void ReleaseDataTransfer()
+    {
+        DataTransfer?.Dispose();
+        DataTransfer = null;
+    }
 }

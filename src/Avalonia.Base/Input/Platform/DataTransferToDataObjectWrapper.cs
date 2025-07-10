@@ -4,11 +4,11 @@ using System.Linq;
 namespace Avalonia.Input.Platform;
 
 /// <summary>
-/// Wraps a <see cref="IDataTransfer"/> into a legacy <see cref="IDataObject"/>.
+/// Wraps a <see cref="IDataTransferItem"/> into a legacy <see cref="IDataObject"/>.
 /// </summary>
-internal sealed class DataTransferToDataObjectWrapper(IDataTransfer dataTransfer) : IDataObject
+internal sealed class DataTransferToDataObjectWrapper(IDataTransfer3 dataTransfer) : IDataObject
 {
-    public IDataTransfer DataTransfer { get; } = dataTransfer;
+    public IDataTransfer3 DataTransfer { get; } = dataTransfer;
 
     public IEnumerable<string> GetDataFormats()
         => DataTransfer.GetFormats().Select(format => format.SystemName);
@@ -17,5 +17,5 @@ internal sealed class DataTransferToDataObjectWrapper(IDataTransfer dataTransfer
         => DataTransfer.Contains(DataFormat.Parse(dataFormat));
 
     public object? Get(string dataFormat)
-        => DataTransfer.TryGet(DataFormat.Parse(dataFormat));
+        => DataTransfer.TryGetAsync<object?>(DataFormat.Parse(dataFormat)).GetAwaiter().GetResult();
 }
