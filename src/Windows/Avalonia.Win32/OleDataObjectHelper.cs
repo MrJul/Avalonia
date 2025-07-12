@@ -48,13 +48,10 @@ internal static class OleDataObjectHelper
         if (DataFormat.Text.Equals(format))
             return ReadStringFromHGlobal(hGlobal);
 
-        if (DataFormat.FileNames.Equals(format))
-            return ReadFileNamesFromHGlobal(hGlobal);
-
-        if (DataFormat.Files.Equals(format))
+        if (DataFormat.File.Equals(format))
         {
             return ReadFileNamesFromHGlobal(hGlobal)
-                .Select(StorageProviderHelpers.TryCreateBclStorageItem)
+                .Select(fileName => StorageProviderHelpers.TryCreateBclStorageItem(fileName) as IStorageItem)
                 .Where(f => f is not null)
                 .ToArray();
         }
@@ -149,13 +146,7 @@ internal static class OleDataObjectHelper
         if (DataFormat.Text.Equals(format))
             return WriteStringToHGlobal(ref hGlobal, Convert.ToString(data) ?? string.Empty);
 
-        if (DataFormat.FileNames.Equals(format))
-        {
-            var fileNames = GetTypedData<IEnumerable<string>>(data, format) ?? [];
-            return WriteFileNamesToHGlobal(ref hGlobal, fileNames);
-        }
-
-        if (DataFormat.Files.Equals(format))
+        if (DataFormat.File.Equals(format))
         {
             var files = GetTypedData<IEnumerable<IStorageItem>>(data, format) ?? [];
 

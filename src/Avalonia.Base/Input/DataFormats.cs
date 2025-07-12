@@ -16,7 +16,7 @@ namespace Avalonia.Input
         /// <summary>
         /// Dataformat for one or more files.
         /// </summary>
-        [Obsolete($"Use {nameof(DataFormat)}.{nameof(DataFormat.Files)} instead.")]
+        [Obsolete($"Use {nameof(DataFormat)}.{nameof(DataFormat.File)} instead.")]
         public static readonly string Files = DataFormat.NameFiles;
         
         /// <summary>

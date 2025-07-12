@@ -17,7 +17,7 @@ namespace Avalonia.Win32
 
         public Task<DragDropEffects> DoDragDropAsync(
             PointerEventArgs triggerEvent,
-            IDataTransfer3 dataTransfer,
+            IDataTransfer dataTransfer,
             DragDropEffects allowedEffects)
         {
             Dispatcher.UIThread.VerifyAccess();

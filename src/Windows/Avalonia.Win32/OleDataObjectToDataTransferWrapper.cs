@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
-using System.Threading.Tasks;
 using Avalonia.Input.Platform;
+using Avalonia.Platform.Storage;
 using MicroCom.Runtime;
 using static Avalonia.Win32.Interop.UnmanagedMethods;
 using FORMATETC = Avalonia.Win32.Interop.UnmanagedMethods.FORMATETC;
@@ -14,16 +14,13 @@ using STGMEDIUM = Avalonia.Win32.Interop.UnmanagedMethods.STGMEDIUM;
 namespace Avalonia.Win32;
 
 /// <summary>
-/// Wraps a Win32 <see cref="Win32Com.IDataObject"/> into a <see cref="IDataTransfer3"/>.
+/// Wraps a Win32 <see cref="Win32Com.IDataObject"/> into a <see cref="IDataTransfer"/>.
 /// </summary>
 /// <param name="oleDataObject">The wrapped OLE data object.</param>
 internal sealed class OleDataObjectToDataTransferWrapper(Win32Com.IDataObject oleDataObject)
-    : IDataTransfer3, IDataTransferItem
+    : IDataTransfer
 {
     private readonly Win32Com.IDataObject _oleDataObject = oleDataObject.CloneReference();
-
-    IEnumerable<IDataTransferItem> IDataTransfer3.GetItems()
-        => [this];
 
     public IEnumerable<DataFormat> GetFormats()
     {
@@ -33,9 +30,7 @@ internal sealed class OleDataObjectToDataTransferWrapper(Win32Com.IDataObject ol
         enumFormat.Reset();
 
         while (Next(enumFormat) is { } format)
-        {
             yield return format;
-        }
 
         static unsafe DataFormat? Next(IEnumFORMATETC enumFormat)
         {
@@ -50,6 +45,43 @@ internal sealed class OleDataObjectToDataTransferWrapper(Win32Com.IDataObject ol
                 Marshal.FreeCoTaskMem(formatEtc.ptd);
 
             return ClipboardFormatRegistry.GetFormatById(formatEtc.cfFormat);
+        }
+    }
+
+    public IEnumerable<IDataTransferItem> GetItems(IEnumerable<DataFormat>? formats)
+    {
+        DataFormat[]? formatArray = null;
+
+        if (formats is not null)
+        {
+            formatArray = formats as DataFormat[] ?? formats.ToArray();
+            if (formatArray.Length == 0)
+                return [];
+        }
+
+        return GetItemsCore();
+
+        IEnumerable<IDataTransferItem> GetItemsCore()
+        {
+            foreach (var format in GetFormats())
+            {
+                if (formatArray is not null && Array.IndexOf(formatArray, format) < 0)
+                    continue;
+
+                if (DataFormat.File.Equals(format))
+                {
+                    // This is not ideal as we're reading the filenames ahead of time to generate the appropriate items.
+                    // However, it's very like that we're filtering on formats, so files are requested by the caller.
+                    // If this isn't the case, this still isn't a heavy operation.
+                    if (TryGet(format) is IStorageItem[] storageItems)
+                    {
+                        foreach (var storageItem in storageItems)
+                            yield return DataTransferItem.Create(format, storageItem);
+                    }
+                }
+                else
+                    yield return DataTransferItem.Create(format, TryGet);
+            }
         }
     }
 
@@ -82,9 +114,6 @@ internal sealed class OleDataObjectToDataTransferWrapper(Win32Com.IDataObject ol
 
         return null;
     }
-
-    Task<object?> IDataTransferItem.TryGetAsync(DataFormat format)
-        => Task.FromResult(TryGet(format));
 
     public void Dispose()
         => _oleDataObject.Dispose();

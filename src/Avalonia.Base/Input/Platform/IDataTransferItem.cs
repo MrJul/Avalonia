@@ -4,10 +4,10 @@ using System.Threading.Tasks;
 namespace Avalonia.Input.Platform;
 
 /// <summary>
-/// Represent an item inside a <see cref="IDataTransfer3"/>.
+/// Represent an item inside a <see cref="IDataTransfer"/>.
 /// An item may support several formats and can return the value of a given format on demand.
 /// </summary>
-/// <seealso cref="DataTransferItem3"/>
+/// <seealso cref="DataTransferItem"/>
 public interface IDataTransferItem
 {
     /// <summary>

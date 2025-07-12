@@ -9,6 +9,7 @@ public sealed record DataFormat
     private const string PrefixCrossPlatform = "avalonia-xplat-format:";
 
     internal const string NameText = "Text";
+    internal const string NameFile = "File";
     internal const string NameFiles = "Files";
     internal const string NameFileNames = "FileNames";
 
@@ -31,10 +32,13 @@ public sealed record DataFormat
 
     public static DataFormat Text { get; } = CreateWellKnownFormat(NameText);
 
-    public static DataFormat Files { get; } = CreateWellKnownFormat(NameFiles);
+    internal static DataFormat File { get; } = CreateWellKnownFormat(NameFile);
 
     // TODO12: remove
-    internal static DataFormat FileNames { get; } = CreateWellKnownFormat(NameFileNames);
+    internal static DataFormat Files3 { get; } = CreateWellKnownFormat(NameFiles);
+
+    // TODO12: remove
+    internal static DataFormat FileNames3 { get; } = CreateWellKnownFormat(NameFileNames);
 
     private static DataFormat CreateWellKnownFormat(string identifier)
         => new(DataFormatKind.CrossPlatform, identifier, isLegacy: true);
@@ -65,11 +69,14 @@ public sealed record DataFormat
             if (NameText.Equals(identifier, StringComparison.OrdinalIgnoreCase))
                 return Text;
 
+            if (NameFile.Equals(identifier, StringComparison.OrdinalIgnoreCase))
+                return File;
+
             if (NameFiles.Equals(identifier, StringComparison.OrdinalIgnoreCase))
-                return Files;
+                return Files3;
 
             if (NameFileNames.Equals(identifier, StringComparison.OrdinalIgnoreCase))
-                return FileNames;
+                return FileNames3;
 
             return null;
         }

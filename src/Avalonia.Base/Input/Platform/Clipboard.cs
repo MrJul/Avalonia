@@ -10,13 +10,13 @@ namespace Avalonia.Input.Platform;
 internal sealed class Clipboard(IClipboardImpl clipboardImpl) : IClipboard
 {
     private readonly IClipboardImpl _clipboardImpl = clipboardImpl;
-    private IDataTransfer3? _lastDataTransfer;
+    private IDataTransfer? _lastDataTransfer;
 
     Task<string?> IClipboard.GetTextAsync()
         => this.TryGetTextAsync();
 
     Task IClipboard.SetTextAsync(string? text)
-        => this.SetDataAsync(DataFormat.Text, text);
+        => this.SetValueAsync(DataFormat.Text, text);
 
     public Task ClearAsync()
     {
@@ -29,7 +29,7 @@ internal sealed class Clipboard(IClipboardImpl clipboardImpl) : IClipboard
     Task IClipboard.SetDataObjectAsync(IDataObject data)
         => SetDataAsync(new DataObjectToDataTransferWrapper(data));
 
-    public Task SetDataAsync(IDataTransfer3? dataTransfer)
+    public Task SetDataAsync(IDataTransfer? dataTransfer)
     {
         if (dataTransfer is null)
             return ClearAsync();
@@ -53,9 +53,9 @@ internal sealed class Clipboard(IClipboardImpl clipboardImpl) : IClipboard
         => _clipboardImpl.GetDataFormatsAsync();
 
     Task<object?> IClipboard.GetDataAsync(string format)
-        => this.TryGetDataAsync<object?>(DataFormat.Parse(format));
+        => this.TryGetValueAsync<object?>(DataFormat.Parse(format));
 
-    public Task<IDataTransfer3?> TryGetDataAsync(IEnumerable<DataFormat> formats)
+    public Task<IDataTransfer?> TryGetDataAsync(IEnumerable<DataFormat> formats)
         => _clipboardImpl.TryGetDataAsync(formats);
 
     async Task<IDataObject?> IClipboard.TryGetInProcessDataObjectAsync()
@@ -64,7 +64,7 @@ internal sealed class Clipboard(IClipboardImpl clipboardImpl) : IClipboard
         return (dataObject as DataObjectToDataTransferWrapper)?.DataObject;
     }
 
-    public async Task<IDataTransfer3?> TryGetInProcessDataTransferAsync()
+    public async Task<IDataTransfer?> TryGetInProcessDataTransferAsync()
     {
         if (_lastDataTransfer is null || _clipboardImpl is not IOwnedClipboardImpl ownedClipboardImpl)
             return null;

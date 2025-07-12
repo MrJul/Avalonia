@@ -8,18 +8,33 @@ namespace Avalonia.Input.Platform;
 
 // TODO12: remove
 /// <summary>
-/// Wraps a legacy <see cref="IDataObject"/> into a <see cref="IDataTransfer3"/>.
+/// Wraps a legacy <see cref="IDataObject"/> into a <see cref="IDataTransfer"/>.
 /// </summary>
 internal sealed class DataObjectToDataTransferWrapper(IDataObject dataObject)
-    : IDataTransfer3, IDataTransferItem
+    : IDataTransfer, IDataTransferItem
 {
     public IDataObject DataObject { get; } = dataObject;
 
-    IEnumerable<IDataTransferItem> IDataTransfer3.GetItems()
-        => [this];
-
     public IEnumerable<DataFormat> GetFormats()
         => DataObject.GetDataFormats().Select(DataFormat.Parse);
+
+    public IEnumerable<IDataTransferItem> GetItems(IEnumerable<DataFormat>? formats = null)
+    {
+        if (formats is null)
+            return [this];
+
+        var formatArray = formats as DataFormat[] ?? formats.ToArray();
+        if (formatArray.Length > 0)
+        {
+            foreach (var format in GetFormats())
+            {
+                if (Array.IndexOf(formatArray, format) >= 0)
+                    return [this];
+            }
+        }
+
+        return [];
+    }
 
     public bool Contains(DataFormat format)
         => DataObject.Contains(format.SystemName);

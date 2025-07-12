@@ -57,11 +57,11 @@ namespace Avalonia.Input.Platform
         /// will be equivalent to <see cref="ClearAsync"/>.
         /// </para>
         /// <para>
-        /// The <see cref="IDataTransfer3"/> must NOT be disposed by the caller after this call.
+        /// The <see cref="IDataTransfer"/> must NOT be disposed by the caller after this call.
         /// The clipboard will dispose of it automatically when it becomes unused.
         /// </para>
         /// </remarks>
-        Task SetDataAsync(IDataTransfer3? dataTransfer);
+        Task SetDataAsync(IDataTransfer? dataTransfer);
 
         /// <summary>
         /// Permanently adds the data that is on the Clipboard so that it is available after the data's original application closes.
@@ -96,11 +96,11 @@ namespace Avalonia.Input.Platform
         /// <param name="formats">The requested formats.</param>
         /// <returns>
         /// If at least one format specified by <paramref name="formats"/> was present on the clipboard, returns an
-        /// <see cref="IDataTransfer3"/> containing the matching items (each returned item matches at least one format).
+        /// <see cref="IDataTransfer"/> containing the matching items (each returned item matches at least one format).
         /// Otherwise, returns null.
         /// </returns>
-        /// <remarks>The returned <see cref="IDataTransfer3"/> MUST be disposed by the caller.</remarks>
-        Task<IDataTransfer3?> TryGetDataAsync(IEnumerable<DataFormat> formats);
+        /// <remarks>The returned <see cref="IDataTransfer"/> MUST be disposed by the caller.</remarks>
+        Task<IDataTransfer?> TryGetDataAsync(IEnumerable<DataFormat> formats);
 
         /// <summary>
         /// If clipboard contains the IDataObject that was set by a previous call to <see cref="SetDataObjectAsync(Avalonia.Input.IDataObject)"/>,
@@ -113,13 +113,13 @@ namespace Avalonia.Input.Platform
         Task<IDataObject?> TryGetInProcessDataObjectAsync();
 
         /// <summary>
-        /// Retrieves a <see cref="IDataTransfer3"/> previously placed on the clipboard by <see cref="SetDataAsync"/>, if any.
+        /// Retrieves a <see cref="IDataTransfer"/> previously placed on the clipboard by <see cref="SetDataAsync"/>, if any.
         /// </summary>
         /// <returns>The data object if present, null otherwise.</returns>
         /// <remarks>
-        /// <para>This method cannot be used to retrieve a <see cref="IDataTransfer3"/> set by another process.</para>
+        /// <para>This method cannot be used to retrieve a <see cref="IDataTransfer"/> set by another process.</para>
         /// <para>This method is only supported on Windows, macOS and X11 platforms. Other platforms will always return null.</para>
         /// </remarks>
-        Task<IDataTransfer3?> TryGetInProcessDataTransferAsync();
+        Task<IDataTransfer?> TryGetInProcessDataTransferAsync();
     }
 }

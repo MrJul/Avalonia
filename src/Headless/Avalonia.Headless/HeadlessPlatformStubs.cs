@@ -17,20 +17,20 @@ namespace Avalonia.Headless
 {
     internal sealed class HeadlessClipboardImplStub : IOwnedClipboardImpl
     {
-        private IDataTransfer3? _data;
+        private IDataTransfer? _data;
 
         public Task<DataFormat[]> GetDataFormatsAsync()
             => Task.FromResult(_data is null ? [] : _data.GetFormats().ToArray());
 
-        public Task<IDataTransfer3?> TryGetDataAsync(IEnumerable<DataFormat> formats)
+        public Task<IDataTransfer?> TryGetDataAsync(IEnumerable<DataFormat> formats)
         {
             if (_data is null)
-                return Task.FromResult<IDataTransfer3?>(null);
+                return Task.FromResult<IDataTransfer?>(null);
 
             DataTransfer? result = null;
             var formatArray = formats as DataFormat[] ?? formats.ToArray();
 
-            foreach (var item in _data.GetItems())
+            foreach (var item in _data.GetItems(formatArray))
             {
                 foreach (var format in formatArray)
                 {
@@ -44,10 +44,10 @@ namespace Avalonia.Headless
                 }
             }
 
-            return Task.FromResult<IDataTransfer3?>(result);
+            return Task.FromResult<IDataTransfer?>(result);
         }
 
-        public Task SetDataAsync(IDataTransfer3 dataTransfer)
+        public Task SetDataAsync(IDataTransfer dataTransfer)
         {
             _data = dataTransfer;
             return Task.CompletedTask;
