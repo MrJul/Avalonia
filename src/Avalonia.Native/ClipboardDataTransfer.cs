@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Input.Platform;
 using Avalonia.Native.Interop;
@@ -9,7 +10,7 @@ using Avalonia.Native.Interop;
 namespace Avalonia.Native;
 
 internal sealed class ClipboardDataTransfer(IAvnClipboard clipboard)
-    : IDataTransfer3, IDataTransferItem
+    : IDataTransfer, IDataTransferItem
 {
     private ClipboardImpl? _clipboard = new(clipboard);
     private DataFormat[]? _formats;
@@ -20,8 +21,23 @@ internal sealed class ClipboardDataTransfer(IAvnClipboard clipboard)
     private DataFormat[] Formats
         => _formats ??= Clipboard.GetFormats();
 
-    IEnumerable<IDataTransferItem> IDataTransfer3.GetItems()
-        => [this];
+    public IEnumerable<IDataTransferItem> GetItems(IEnumerable<DataFormat>? formats = null)
+    {
+        if (formats is null)
+            return [this];
+
+        var formatArray = formats as DataFormat[] ?? formats.ToArray();
+        if (formatArray.Length > 0)
+        {
+            foreach (var format in GetFormats())
+            {
+                if (Array.IndexOf(formatArray, format) >= 0)
+                    return [this];
+            }
+        }
+
+        return [];
+    }
 
     public IEnumerable<DataFormat> GetFormats()
         => Formats;

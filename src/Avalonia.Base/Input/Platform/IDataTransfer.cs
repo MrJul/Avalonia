@@ -24,16 +24,27 @@ namespace Avalonia.Input.Platform;
 /// </item>
 /// </list>
 /// </remarks>
-public interface IDataTransfer3 : IDisposable
+public interface IDataTransfer : IDisposable
 {
     /// <summary>
-    /// Gets the list of <see cref="IDataTransferItem"/> contained in this object.
+    /// Gets the formats supported by a <see cref="IDataTransfer"/>.
     /// </summary>
+    /// <returns>A list of supported formats.</returns>
+    IEnumerable<DataFormat> GetFormats();
+
+    /// <summary>
+    /// Gets the list of <see cref="IDataTransferItem"/> contained in this object,
+    /// optionally filtered by specific formats.
+    /// </summary>
+    /// <param name="formats">
+    /// If null, no filtering is going to be performed: all items in the clipboard will be returned.
+    /// If non-null, only items matching at least one format is specified.
+    /// (If an empty collection is specified, no items will be returned).
+    /// </param>
     /// <returns>A list of items.</returns>
     /// <remarks>
-    /// Windows and X11 only support a single data item. If several items are specified for these platforms, they will
-    /// be merged into a single one. If a format is supported by multiple items when that happens, the value from the
-    /// first item providing the given format will be used.
+    /// Some platforms (such as Windows and X11) may only support a single data item for most formats.
     /// </remarks>
-    IEnumerable<IDataTransferItem> GetItems();
+    IEnumerable<IDataTransferItem> GetItems(IEnumerable<DataFormat>? formats = null);
+
 }

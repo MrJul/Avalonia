@@ -26,12 +26,12 @@ namespace ControlCatalog.Pages
 
             SetupDnd(
                 "Text",
-                d => d.Set(DataFormat.Text, $"Text was dragged {++textCount} times"),
+                d => d.Items.Add(DataTransferItem.Create(DataFormat.Text, $"Text was dragged {++textCount} times")),
                 DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
 
             SetupDnd(
                 "Custom",
-                d => d.Set(_customFormat, "Test123"),
+                d => d.Items.Add(DataTransferItem.Create(_customFormat, "Test123")),
                 DragDropEffects.Move);
 
             SetupDnd(
@@ -42,7 +42,7 @@ namespace ControlCatalog.Pages
                         TopLevel.GetTopLevel(this) is { } topLevel &&
                         await topLevel.StorageProvider.TryGetFileFromPathAsync(name) is { } storageFile)
                     {
-                        d.Set(DataFormat.Files, new[] { storageFile });
+                        d.Items.Add(DataTransferItem.Create(DataFormat.Files, new[] { storageFile }));
                     }
                 },
                 DragDropEffects.Copy);
@@ -120,11 +120,11 @@ namespace ControlCatalog.Pages
 
                 if (e.DataTransfer.Contains(DataFormat.Text))
                 {
-                    _dropState.Text = e.DataTransfer.TryGetText();
+                    _dropState.Text = await e.DataTransfer.TryGetTextAsync();
                 }
                 else if (e.DataTransfer.Contains(DataFormat.Files))
                 {
-                    var files = e.DataTransfer.TryGetFiles() ?? [];
+                    var files = await e.DataTransfer.TryGetFilesAsync() ?? [];
                     var contentStr = "";
 
                     foreach (var item in files)
@@ -149,7 +149,7 @@ namespace ControlCatalog.Pages
                 }
                 else if (e.DataTransfer.Contains(_customFormat))
                 {
-                    _dropState.Text = "Custom: " + e.DataTransfer.TryGet(_customFormat);
+                    _dropState.Text = "Custom: " + await e.DataTransfer.TryGetValueAsync<object?>(_customFormat);
                 }
             }
 

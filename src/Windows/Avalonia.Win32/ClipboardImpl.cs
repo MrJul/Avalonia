@@ -57,7 +57,7 @@ namespace Avalonia.Win32
             _lastStoredDataObjectIntPtr = IntPtr.Zero;
         }
 
-        public async Task SetDataAsync(IDataTransfer3 dataTransfer)
+        public async Task SetDataAsync(IDataTransfer dataTransfer)
         {
             Dispatcher.UIThread.VerifyAccess();
             using var wrapper = new DataTransferToOleDataObjectWrapper(dataTransfer);
@@ -112,7 +112,7 @@ namespace Avalonia.Win32
             }
         }
 
-        public async Task<IDataTransfer3?> TryGetDataAsync(IEnumerable<DataFormat> formats)
+        public async Task<IDataTransfer?> TryGetDataAsync(IEnumerable<DataFormat> formats)
         {
             Dispatcher.UIThread.VerifyAccess();
             var i = OleRetryCount;

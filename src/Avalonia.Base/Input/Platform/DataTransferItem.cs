@@ -7,9 +7,9 @@ namespace Avalonia.Input.Platform;
 
 /// <summary>
 /// Base implementation of <see cref="IDataTransferItem"/>.
-/// This class provides several static methods to easily create a <see cref="DataTransferItem3"/> for common usages.
+/// This class provides several static methods to easily create a <see cref="DataTransferItem"/> for common usages.
 /// </summary>
-public abstract class DataTransferItem3 : IDataTransferItem
+public abstract class DataTransferItem : IDataTransferItem
 {
     /// <inheritdoc />
     public abstract IEnumerable<DataFormat> GetFormats();
@@ -22,38 +22,38 @@ public abstract class DataTransferItem3 : IDataTransferItem
     public abstract Task<object?> TryGetAsync(DataFormat format);
 
     /// <summary>
-    /// Creates a new <see cref="DataTransferItem3"/> for a single format with a given value.
+    /// Creates a new <see cref="DataTransferItem"/> for a single format with a given value.
     /// </summary>
     /// <typeparam name="T">The value type.</typeparam>
     /// <param name="format">The format.</param>
     /// <param name="value">The value corresponding to <paramref name="format"/>.</param>
-    /// <returns>A <see cref="DataTransferItem3"/> instance.</returns>
-    public static DataTransferItem3 Create<T>(DataFormat format, T value)
+    /// <returns>A <see cref="DataTransferItem"/> instance.</returns>
+    public static DataTransferItem Create<T>(DataFormat format, T value)
         => new SimpleDataTransferItem(format, value);
 
     /// <summary>
-    /// Creates a new <see cref="DataTransferItem3"/> for a single format,
+    /// Creates a new <see cref="DataTransferItem"/> for a single format,
     /// with its value created synchronously on demand.
     /// </summary>
     /// <typeparam name="T">The value type.</typeparam>
     /// <param name="format">The format.</param>
     /// <param name="getValue">A function returning the value corresponding to <paramref name="format"/>.</param>
-    /// <returns>A <see cref="DataTransferItem3"/> instance.</returns>
-    public static DataTransferItem3 Create<T>(DataFormat format, Func<T> getValue)
+    /// <returns>A <see cref="DataTransferItem"/> instance.</returns>
+    public static DataTransferItem Create<T>(DataFormat format, Func<T> getValue)
         => new AsyncDataTransferItem(
             format,
             static state => Task.FromResult<object?>(((Func<T>)state)()),
             getValue);
 
     /// <summary>
-    /// Creates a new <see cref="DataTransferItem3"/> for a single format,
+    /// Creates a new <see cref="DataTransferItem"/> for a single format,
     /// with its value created asynchronously on demand.
     /// </summary>
     /// <typeparam name="T">The value type.</typeparam>
     /// <param name="format">The format.</param>
     /// <param name="getValueAsync">A function returning the value corresponding to <paramref name="format"/>.</param>
-    /// <returns>A <see cref="DataTransferItem3"/> instance.</returns>
-    public static DataTransferItem3 Create<T>(DataFormat format, Func<Task<T>> getValueAsync)
+    /// <returns>A <see cref="DataTransferItem"/> instance.</returns>
+    public static DataTransferItem Create<T>(DataFormat format, Func<Task<T>> getValueAsync)
     {
         Func<object, Task<object?>> untypedGetValueAsync = typeof(T) == typeof(object) ?
             static state => ((Func<Task<object?>>)state)() :
@@ -63,15 +63,15 @@ public abstract class DataTransferItem3 : IDataTransferItem
     }
 
     /// <summary>
-    /// Creates a new <see cref="DataTransferItem3"/> from a given dictionary.
+    /// Creates a new <see cref="DataTransferItem"/> from a given dictionary.
     /// </summary>
     /// <param name="values">A dictionary containing the supported formats with their values.</param>
-    /// <returns>A <see cref="DataTransferItem3"/> instance.</returns>
-    public static DataTransferItem3 Create(IReadOnlyDictionary<DataFormat, object?> values)
+    /// <returns>A <see cref="DataTransferItem"/> instance.</returns>
+    public static DataTransferItem Create(IReadOnlyDictionary<DataFormat, object?> values)
         => new DictionaryDataTransferItem(values);
 
     private sealed class SimpleDataTransferItem(DataFormat format, object? value)
-        : DataTransferItem3
+        : DataTransferItem
     {
         private readonly DataFormat _format = format;
         private readonly object? _value = value;
@@ -87,11 +87,12 @@ public abstract class DataTransferItem3 : IDataTransferItem
     }
 
     private sealed class AsyncDataTransferItem(DataFormat format, Func<object, Task<object?>> getValueAsync, object state)
-        : DataTransferItem3
+        : DataTransferItem
     {
         private readonly DataFormat _format = format;
         private readonly Func<object, Task<object?>> _getValueAsync = getValueAsync;
         private readonly object _state = state;
+        private Task<object?>? _cachedResult;
 
         public override IEnumerable<DataFormat> GetFormats()
             => [_format];
@@ -100,11 +101,16 @@ public abstract class DataTransferItem3 : IDataTransferItem
             => _format.Equals(format);
 
         public override Task<object?> TryGetAsync(DataFormat format)
-            => _format.Equals(format) ? _getValueAsync(_state) : Task.FromResult<object?>(null);
+        {
+            if (_format.Equals(format))
+                return _cachedResult ??= _getValueAsync(_state);
+
+            return Task.FromResult<object?>(null);
+        }
     }
 
     private sealed class DictionaryDataTransferItem(IReadOnlyDictionary<DataFormat, object?> values)
-        : DataTransferItem3
+        : DataTransferItem
     {
         private readonly IReadOnlyDictionary<DataFormat, object?> _values = values;
 

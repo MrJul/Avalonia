@@ -65,8 +65,7 @@ namespace Avalonia.Native
                         results.Add(DataFormat.Text);
                         break;
                     case NSFilenamesPboardType:
-                        results.Add(DataFormat.Files);
-                        results.Add(DataFormat.FileNames);
+                        results.Add(DataFormat.File);
                         break;
                     case { } name:
                         results.Add(DataFormat.Parse(name));
@@ -132,12 +131,12 @@ namespace Avalonia.Native
             return GetBytes(format);
         }
 
-        public Task<IDataTransfer3?> TryGetDataAsync(IEnumerable<DataFormat> formats)
+        public Task<IDataTransfer?> TryGetDataAsync(IEnumerable<DataFormat> formats)
         {
             throw new NotImplementedException();
         }
 
-        public Task SetDataAsync(IDataTransfer3 dataTransfer)
+        public Task SetDataAsync(IDataTransfer dataTransfer)
         {
             ClearCore();
 
@@ -152,7 +151,7 @@ namespace Avalonia.Native
             // }
         }
 
-        public void SetData(IDataTransfer3 dataTransfer)
+        public void SetData(IDataTransfer dataTransfer)
         {
             ClearCore();
 
