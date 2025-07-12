@@ -1,4 +1,6 @@
-﻿using System.Threading.Tasks;
+﻿using System.Collections.Generic;
+using System.Threading.Tasks;
+using Avalonia.Platform.Storage;
 
 namespace Avalonia.Input.Platform;
 
@@ -48,7 +50,7 @@ public static class ClipboardExtensions
             return clipboard.ClearAsync();
 
         var dataTransfer = new DataTransfer();
-        dataTransfer.Items.Add(DataTransferItem3.Create(format, value));
+        dataTransfer.Items.Add(DataTransferItem.Create(format, value));
         return clipboard.SetDataAsync(dataTransfer);
     }
 
@@ -62,18 +64,43 @@ public static class ClipboardExtensions
         => clipboard.TryGetDataAsync<string>(DataFormat.Text);
 
     /// <summary>
+    /// Returns a list of files, if available, from the clipboard.
+    /// </summary>
+    /// <param name="clipboard">The data transfer instance.</param>
+    /// <returns>An array of <see cref="IStorageItem"/> (files or folders), or null if the format isn't available.</returns>
+    /// <seealso cref="DataFormat.Files"/>.
+    public static async Task<IStorageItem[]?> TryGetFilesAsync(this IClipboard clipboard)
+        => await clipboard.TryGetDataAsync<IStorageItem[]>(DataFormat.Files).ConfigureAwait(false);
+
+    /// <summary>
     /// Places a text on the clipboard.
     /// </summary>
     /// <param name="clipboard">The clipboard instance.</param>
-    /// <param name="value">The value to place on the clipboard.</param>
+    /// <param name="text">The value to place on the clipboard.</param>
     /// <remarks>
     /// <para>By calling this method, the clipboard will get cleared of any possible previous data.</para>
     /// <para>
-    /// If <paramref name="value"/> is null, nothing will get placed on the clipboard and this method
+    /// If <paramref name="text"/> is null, nothing will get placed on the clipboard and this method
     /// will be equivalent to <see cref="IClipboard.ClearAsync"/>.
     /// </para>
     /// </remarks>
     /// <seealso cref="DataFormat.Text"/>
-    public static Task SetTextAsync(this IClipboard clipboard, string? value)
-        => clipboard.SetDataAsync(DataFormat.Text, value);
+    public static Task SetTextAsync(this IClipboard clipboard, string? text)
+        => clipboard.SetDataAsync(DataFormat.Text, text);
+
+    /// <summary>
+    /// Places a list of files on the clipboard.
+    /// </summary>
+    /// <param name="clipboard">The clipboard instance.</param>
+    /// <param name="files"></param>
+    /// <remarks>
+    /// <para>By calling this method, the clipboard will get cleared of any possible previous data.</para>
+    /// <para>
+    /// If <paramref name="files"/> is null, nothing will get placed on the clipboard and this method
+    /// will be equivalent to <see cref="IClipboard.ClearAsync"/>.
+    /// </para>
+    /// </remarks>
+    /// <seealso cref="DataFormat.Files"/>
+    public static Task SetFilesAsync(this IClipboard clipboard, IEnumerable<IStorageItem> files)
+        => clipboard.SetDataAsync(DataFormat.Files, files);
 }

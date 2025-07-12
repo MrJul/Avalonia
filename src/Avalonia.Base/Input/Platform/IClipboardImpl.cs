@@ -14,10 +14,10 @@ public interface IClipboardImpl
     Task<DataFormat[]> GetDataFormatsAsync();
 
     /// <inheritdoc cref="IClipboard.TryGetDataAsync"/>
-    Task<IDataTransfer3?> TryGetDataAsync(IEnumerable<DataFormat> formats);
+    Task<IDataTransfer?> TryGetDataAsync(IEnumerable<DataFormat> formats);
 
     /// <inheritdoc cref="IClipboard.SetDataAsync"/>
-    Task SetDataAsync(IDataTransfer3 dataTransfer);
+    Task SetDataAsync(IDataTransfer dataTransfer);
 
     /// <inheritdoc cref="IClipboard.ClearAsync"/>
     Task ClearAsync();

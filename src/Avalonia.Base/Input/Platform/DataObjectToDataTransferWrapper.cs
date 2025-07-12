@@ -8,14 +8,14 @@ namespace Avalonia.Input.Platform;
 
 // TODO12: remove
 /// <summary>
-/// Wraps a legacy <see cref="IDataObject"/> into a <see cref="IDataTransfer3"/>.
+/// Wraps a legacy <see cref="IDataObject"/> into a <see cref="IDataTransfer"/>.
 /// </summary>
 internal sealed class DataObjectToDataTransferWrapper(IDataObject dataObject)
-    : IDataTransfer3, IDataTransferItem
+    : IDataTransfer, IDataTransferItem
 {
     public IDataObject DataObject { get; } = dataObject;
 
-    IEnumerable<IDataTransferItem> IDataTransfer3.GetItems()
+    IEnumerable<IDataTransferItem> IDataTransfer.GetItems()
         => [this];
 
     public IEnumerable<DataFormat> GetFormats()

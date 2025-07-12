@@ -24,7 +24,7 @@ namespace Avalonia.Input.Platform;
 /// </item>
 /// </list>
 /// </remarks>
-public interface IDataTransfer3 : IDisposable
+public interface IDataTransfer : IDisposable
 {
     /// <summary>
     /// Gets the list of <see cref="IDataTransferItem"/> contained in this object.

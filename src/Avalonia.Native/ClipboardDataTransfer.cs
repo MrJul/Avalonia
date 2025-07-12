@@ -9,7 +9,7 @@ using Avalonia.Native.Interop;
 namespace Avalonia.Native;
 
 internal sealed class ClipboardDataTransfer(IAvnClipboard clipboard)
-    : IDataTransfer3, IDataTransferItem
+    : IDataTransfer, IDataTransferItem
 {
     private ClipboardImpl? _clipboard = new(clipboard);
     private DataFormat[]? _formats;
@@ -20,7 +20,7 @@ internal sealed class ClipboardDataTransfer(IAvnClipboard clipboard)
     private DataFormat[] Formats
         => _formats ??= Clipboard.GetFormats();
 
-    IEnumerable<IDataTransferItem> IDataTransfer3.GetItems()
+    IEnumerable<IDataTransferItem> IDataTransfer.GetItems()
         => [this];
 
     public IEnumerable<DataFormat> GetFormats()

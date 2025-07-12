@@ -14,15 +14,15 @@ using STGMEDIUM = Avalonia.Win32.Interop.UnmanagedMethods.STGMEDIUM;
 namespace Avalonia.Win32;
 
 /// <summary>
-/// Wraps a Win32 <see cref="Win32Com.IDataObject"/> into a <see cref="IDataTransfer3"/>.
+/// Wraps a Win32 <see cref="Win32Com.IDataObject"/> into a <see cref="IDataTransfer"/>.
 /// </summary>
 /// <param name="oleDataObject">The wrapped OLE data object.</param>
 internal sealed class OleDataObjectToDataTransferWrapper(Win32Com.IDataObject oleDataObject)
-    : IDataTransfer3, IDataTransferItem
+    : IDataTransfer, IDataTransferItem
 {
     private readonly Win32Com.IDataObject _oleDataObject = oleDataObject.CloneReference();
 
-    IEnumerable<IDataTransferItem> IDataTransfer3.GetItems()
+    IEnumerable<IDataTransferItem> IDataTransfer.GetItems()
         => [this];
 
     public IEnumerable<DataFormat> GetFormats()

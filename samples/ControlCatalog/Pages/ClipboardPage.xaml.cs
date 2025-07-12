@@ -41,37 +41,19 @@ namespace ControlCatalog.Pages
 
         private async void CopyText(object? sender, RoutedEventArgs args)
         {
-            if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard && ClipboardContent is { } clipboardContent)
-                await clipboard.SetTextAsync(clipboardContent.Text ?? String.Empty);
+            if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+                await clipboard.SetTextAsync(ClipboardContent.Text ?? string.Empty);
         }
 
         private async void PasteText(object? sender, RoutedEventArgs args)
         {
             if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
             {
-                ClipboardContent.Text = await clipboard.GetTextAsync();
+                ClipboardContent.Text = await clipboard.TryGetTextAsync();
             }
         }
 
-        private async void CopyTextDataObject(object? sender, RoutedEventArgs args)
-        {
-            if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
-            {
-                var dataTransfer =  _storedDataTransfer = new DataTransfer();
-                dataTransfer.Set(DataFormat.Text, ClipboardContent.Text ?? string.Empty);
-                await clipboard.SetDataAsync(dataTransfer);
-            }
-        }
-
-        private async void PasteTextDataObject(object? sender, RoutedEventArgs args)
-        {
-            if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
-            {
-                ClipboardContent.Text = await clipboard.TryGetDataAsync(DataFormat.Text) as string ?? string.Empty;
-            }
-        }
-
-        private async void CopyFilesDataObject(object? sender, RoutedEventArgs args)
+        private async void CopyFiles(object? sender, RoutedEventArgs args)
         {
             if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
             {
@@ -106,7 +88,7 @@ namespace ControlCatalog.Pages
                 if (files.Count > 0)
                 {
                     var dataTransfer = _storedDataTransfer = new DataTransfer();
-                    dataTransfer.Set(DataFormat.Files, files);
+                    dataTransfer.Items.Add(DataTransferItem.Create(DataFormat.Files, files));
                     await clipboard.SetDataAsync(dataTransfer);
                     NotificationManager.Show(new Notification("Success", "Copy completated.", NotificationType.Success));
                 }
@@ -117,11 +99,11 @@ namespace ControlCatalog.Pages
             }
         }
 
-        private async void PasteFilesDataObject(object? sender, RoutedEventArgs args)
+        private async void PasteFiles(object? sender, RoutedEventArgs args)
         {
             if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
             {
-                var files = await clipboard.TryGetDataAsync(DataFormat.Files) as IEnumerable<IStorageItem>;
+                var files = await clipboard.TryGetFilesAsync();
 
                 ClipboardContent.Text = files != null ? string.Join(Environment.NewLine, files.Select(f => f.TryGetLocalPath() ?? f.Name)) : string.Empty;
             }

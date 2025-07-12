@@ -13,10 +13,10 @@ using STGMEDIUM = Avalonia.Win32.Interop.UnmanagedMethods.STGMEDIUM;
 namespace Avalonia.Win32;
 
 /// <summary>
-/// Wraps an Avalonia <see cref="IDataTransfer3"/> into a Win32 <see cref="Win32Com.IDataObject"/>.
+/// Wraps an Avalonia <see cref="IDataTransfer"/> into a Win32 <see cref="Win32Com.IDataObject"/>.
 /// </summary>
 /// <param name="dataTransfer">The wrapped data transfer instance.</param>
-internal class DataTransferToOleDataObjectWrapper(IDataTransfer3 dataTransfer)
+internal class DataTransferToOleDataObjectWrapper(IDataTransfer dataTransfer)
     : CallbackBase, Win32Com.IDataObject
 {
     private class FormatEnumerator : CallbackBase, Win32Com.IEnumFORMATETC
@@ -77,7 +77,7 @@ internal class DataTransferToOleDataObjectWrapper(IDataTransfer3 dataTransfer)
         }
     }
 
-    public IDataTransfer3? DataTransfer { get; private set; } = dataTransfer;
+    public IDataTransfer? DataTransfer { get; private set; } = dataTransfer;
 
     public bool IsDisposed
         => DataTransfer is null;
