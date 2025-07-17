@@ -497,7 +497,7 @@ internal class TopLevelImpl : ITopLevelImpl, IFramebufferPlatformSurface
             if (dataTransferHandle != IntPtr.Zero)
                 dataTransfer = GCHandle.FromIntPtr(dataTransferHandle).Target as IDataTransfer;
 
-            using (var clipboardDataTransfer = new ClipboardDataTransfer(clipboard))
+            using (var clipboardDataTransfer = new ClipboardDataTransfer(new ClipboardReadSession(clipboard, 0, true)))
             {
                 dataTransfer ??= clipboardDataTransfer;
 

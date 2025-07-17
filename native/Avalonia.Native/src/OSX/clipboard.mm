@@ -1,206 +1,204 @@
 #include "common.h"
 #include "AvnString.h"
 
+@interface WritableClipboardItem : NSObject <NSPasteboardWriting>
+- (instancetype) initWithItem:(nonnull IAvnClipboardDataItem*)item source:(nonnull IAvnClipboardDataSource*)source;
+@end
+
 class Clipboard : public ComSingleObject<IAvnClipboard, &IID_IAvnClipboard>
 {
 private:
-    NSPasteboard* _pb;
-    NSPasteboardItem* _item;
+    NSPasteboard* _pasteboard;
 public:
     FORWARD_IUNKNOWN()
     
-    Clipboard(NSPasteboard* pasteboard, NSPasteboardItem* item)
+    Clipboard(NSPasteboard* pasteboard)
     {
-        if(pasteboard == nil && item == nil)
+        if (pasteboard == nil)
             pasteboard = [NSPasteboard generalPasteboard];
 
-        _pb = pasteboard;
-        _item = item;
+        _pasteboard = pasteboard;
     }
     
-    NSPasteboardItem* TryGetItem()
+    virtual HRESULT GetFormats(int64_t changeCount, IAvnStringArray** ret) override
     {
-        return _item;
-    }
-   
-    virtual HRESULT GetText (char* type, IAvnString**ppv) override
-    {
-        START_COM_CALL;
+        START_COM_ARP_CALL;
         
-        @autoreleasepool
-        {
-            if(ppv == nullptr)
-            {
-                return E_POINTER;
-            }
-            NSString* typeString = [NSString stringWithUTF8String:(const char*)type];
-            NSString* string = _item == nil ? [_pb stringForType:typeString] : [_item stringForType:typeString];
-            
-            *ppv = CreateAvnString(string);
-            
-            return S_OK;
-        }
+        if (ret == nullptr)
+            return E_POINTER;
+        
+        if (changeCount != [_pasteboard changeCount])
+            return COR_E_OBJECTDISPOSED;
+        
+        auto types = [_pasteboard types];
+        *ret = types == nil ? nullptr : CreateAvnStringArray(types);
+        return S_OK;
     }
     
-    virtual HRESULT SetStrings(char* type, IAvnStringArray*ppv) override
+    virtual HRESULT GetItemCount(int64_t changeCount, int* ret) override
     {
-        START_COM_CALL;
+        START_COM_ARP_CALL;
         
-        @autoreleasepool
-        {
-            NSArray<NSString*>* data = GetNSArrayOfStringsAndRelease(ppv);
-            NSString* typeString = [NSString stringWithUTF8String:(const char*)type];
-            if(_item == nil)
-                [_pb setPropertyList: data forType: typeString];
-            else
-                [_item setPropertyList: data forType:typeString];
-            return S_OK;
-        }
+        if (ret == nullptr)
+            return E_POINTER;
+        
+        if (changeCount != [_pasteboard changeCount])
+            return COR_E_OBJECTDISPOSED;
+        
+        auto items = [_pasteboard pasteboardItems];
+        *ret = items == nil ? 0 : (int)[items count];
+        return S_OK;
     }
     
-    virtual HRESULT GetStrings(char* type, IAvnStringArray**ppv) override
+    virtual HRESULT GetItemFormats(int index, int64_t changeCount, IAvnStringArray** ret) override
     {
-        START_COM_CALL;
+        START_COM_ARP_CALL;
         
-        @autoreleasepool
-        {
-            *ppv= nil;
-            NSString* typeString = [NSString stringWithUTF8String:(const char*)type];
-            NSObject* data = _item == nil ? [_pb propertyListForType: typeString] : [_item propertyListForType: typeString];
-            if(data == nil)
-                return S_OK;
-            
-            if([data isKindOfClass: [NSString class]])
-            {
-                *ppv = CreateAvnStringArray((NSString*) data);
-                return S_OK;
-            }
-            
-            NSArray<NSString*>* arr = (NSArray*)data;
-            
-            for(int c = 0; c < [arr count]; c++)
-                if(![[arr objectAtIndex:c] isKindOfClass:[NSString class]])
-                    return E_INVALIDARG;
-            
-            *ppv = CreateAvnStringArray(arr);
-            return S_OK;
-        }
+        if (ret == nullptr)
+            return E_POINTER;
+        
+        if (changeCount != [_pasteboard changeCount])
+            return COR_E_OBJECTDISPOSED;
+        
+        auto item = [[_pasteboard pasteboardItems] objectAtIndex:index];
+        auto types = [item types];
+        *ret = types == nil ? nullptr : CreateAvnStringArray(types);
+        return S_OK;
     }
     
-    virtual HRESULT SetText (char* type, char* utf8String) override
+    virtual HRESULT GetItemValueAsString(int index, int64_t changeCount, const char* format, IAvnString** ret) override
     {
-        START_COM_CALL;
+        START_COM_ARP_CALL;
         
-        @autoreleasepool
-        {
-            auto string = [NSString stringWithUTF8String:(const char*)utf8String];
-            auto typeString = [NSString stringWithUTF8String:(const char*)type];
-            if(_item == nil)
-                [_pb setString: string forType: typeString];
-            else
-                [_item setString: string forType:typeString];
+        if (ret == nullptr)
+            return E_POINTER;
         
-            return S_OK;
-        }
+        if (changeCount != [_pasteboard changeCount])
+            return COR_E_OBJECTDISPOSED;
+        
+        auto item = [[_pasteboard pasteboardItems] objectAtIndex:index];
+        auto value = [item stringForType:[NSString stringWithUTF8String:format]];
+        *ret = value == nil ? nullptr : CreateAvnString(value);
+        return S_OK;
     }
     
-    virtual HRESULT SetBytes(char* type, void* bytes, int len) override
+    virtual HRESULT GetItemValueAsBytes(int index, int64_t changeCount, const char* format, IAvnString** ret) override
     {
-        START_COM_CALL;
+        START_COM_ARP_CALL;
         
-        @autoreleasepool
-        {
-            auto typeString = [NSString stringWithUTF8String:(const char*)type];
-            auto data = [NSData dataWithBytes:bytes length:len];
-            if(_item == nil)
-                [_pb setData:data forType:typeString];
-            else
-                [_item setData:data forType:typeString];
-            return S_OK;
-        }
-    }
-       
-    virtual HRESULT GetBytes(char* type, IAvnString**ppv) override
-    {
-        START_COM_CALL;
+        if (ret == nullptr)
+            return E_POINTER;
         
-        @autoreleasepool
-        {
-            *ppv = nil;
-            auto typeString = [NSString stringWithUTF8String:(const char*)type];
-            NSData*data;
-            @try
-            {
-                if(_item)
-                    data = [_item dataForType:typeString];
-                else
-                    data = [_pb dataForType:typeString];
-                if(data == nil)
-                    return E_FAIL;
-            }
-            @catch(NSException* e)
-            {
-                return E_FAIL;
-            }
-            *ppv = CreateByteArray((void*)data.bytes, (int)data.length);
-            return S_OK;
-        }
+        if (changeCount != [_pasteboard changeCount])
+            return COR_E_OBJECTDISPOSED;
+        
+        auto item = [[_pasteboard pasteboardItems] objectAtIndex:index];
+        auto value = [item dataForType:[NSString stringWithUTF8String:format]];
+        
+        *ret = value == nil || [value length] == 0
+            ? nullptr
+            : CreateByteArray((void*)[value bytes], (int)[value length]);
+        return S_OK;
     }
 
-
-    virtual HRESULT Clear(int64_t* rv) override
+    virtual HRESULT Clear(int64_t* ret) override
     {
-        START_COM_CALL;
+        START_COM_ARP_CALL;
         
-        @autoreleasepool
-        {
-            if(_item != nil)
-            {
-                _item = [NSPasteboardItem new];
-                return 0;
-            }
-            else
-            {
-                *rv = [_pb clearContents];
-                [_pb setString:@"" forType:NSPasteboardTypeString];
-            }
-        
-            return S_OK;
-        }
+        *ret = [_pasteboard clearContents];
+        return S_OK;
     }
     
-    virtual HRESULT GetChangeCount(int64_t* rv) override
+    virtual HRESULT GetChangeCount(int64_t* ret) override
     {
-        START_COM_CALL;
-        if(_item == nil)
-        {
-            *rv = [_pb changeCount];
-            return S_OK;
-        }
-        return E_NOTIMPL;
+        START_COM_ARP_CALL;
+        
+        *ret = [_pasteboard changeCount];
+        return S_OK;
     }
     
-    virtual HRESULT ObtainFormats(IAvnStringArray** ppv) override
+    virtual HRESULT SetData(IAvnClipboardDataSource* source) override
     {
-        START_COM_CALL;
+        START_COM_ARP_CALL;
         
-        @autoreleasepool
+        auto count = source->GetItemCount();
+        auto writableItems = [NSMutableArray<WritableClipboardItem*> arrayWithCapacity:count];
+        
+        for (auto i = 0; i < count; ++i)
         {
-            *ppv = CreateAvnStringArray(_item == nil ? [_pb types] : [_item types]);
-            return S_OK;
+            auto item = source->GetItem(i);
+            auto writableItem = [[WritableClipboardItem alloc] initWithItem:item source:source];
+            [writableItems addObject:writableItem];
         }
+        
+        [_pasteboard writeObjects:writableItems];
+        return S_OK;
     }
 };
 
-extern IAvnClipboard* CreateClipboard(NSPasteboard* pb, NSPasteboardItem* item)
+
+extern IAvnClipboard* CreateClipboard(NSPasteboard* pb)
 {
-    return new Clipboard(pb, item);
+    return new Clipboard(pb);
 }
 
-extern NSPasteboardItem* TryGetPasteboardItem(IAvnClipboard*cb)
+
+@implementation WritableClipboardItem
 {
-    auto clipboard = dynamic_cast<Clipboard*>(cb);
-    if(clipboard == nil)
-        return nil;
-    return clipboard->TryGetItem();
+    IAvnClipboardDataItem* _item;
+    IAvnClipboardDataSource* _source;
 }
+    
+- (WritableClipboardItem*) initWithItem:(nonnull IAvnClipboardDataItem*)item source:(nonnull IAvnClipboardDataSource*)source
+{
+    self = [super init];
+    _item = item;
+    _source = source;
+    
+    // Each item references its source so it doesn't get disposed too early.
+    source->AddRef();
+    
+    return self;
+}
+
+- (nonnull NSArray<NSPasteboardType>*) writableTypesForPasteboard:(nonnull NSPasteboard*)pasteboard
+{
+    return GetNSArrayOfStringsAndRelease(_item->ProvideFormats());
+}
+
+- (NSPasteboardWritingOptions) writingOptionsForType:(NSPasteboardType)type pasteboard:(NSPasteboard*)pasteboard
+{
+    return [type isEqualToString:NSPasteboardTypeString] ? 0 : NSPasteboardWritingPromised;
+}
+
+- (nullable id) pasteboardPropertyListForType:(nonnull NSPasteboardType)type
+{
+    ComPtr<IAvnClipboardDataValue> value(_item->GetValue([type UTF8String]), true);
+    if (value.getRaw() == nullptr)
+        return nil;
+    
+    if (value->IsString())
+        return GetNSStringAndRelease(value->AsString());
+    
+    auto length = value->GetByteLength();
+    auto buffer = malloc(length);
+    value->CopyBytesTo(buffer);
+    return [NSData dataWithBytesNoCopy:buffer length:length];
+}
+
+- (void) dealloc
+{
+    if (_item != nullptr)
+    {
+        _item->Release();
+        _item = nullptr;
+    }
+    
+    if (_source != nullptr)
+    {
+        _source->Release();
+        _source = nullptr;
+    }
+}
+
+@end
