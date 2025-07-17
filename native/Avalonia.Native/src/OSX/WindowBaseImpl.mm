@@ -414,7 +414,8 @@ HRESULT WindowBaseImpl::SetFrameThemeVariant(AvnPlatformThemeVariant variant) {
 HRESULT WindowBaseImpl::BeginDragAndDropOperation(AvnDragDropEffects effects, AvnPoint point, IAvnClipboard *clipboard, IAvnDndResultCallback *cb, void *sourceHandle) {
     START_COM_CALL;
 
-    auto item = TryGetPasteboardItem(clipboard);
+    //auto item = TryGetPasteboardItem(clipboard);
+    NSPasteboardItem* item = nil;
     [item setString:@"" forType:GetAvnCustomDataType()];
     if (item == nil)
         return E_INVALIDARG;

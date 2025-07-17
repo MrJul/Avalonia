@@ -88,9 +88,10 @@ namespace ControlCatalog.Pages
                 if (files.Count > 0)
                 {
                     var dataTransfer = _storedDataTransfer = new DataTransfer();
-                    dataTransfer.Items.Add(DataTransferItem.Create(DataFormat.Files, files));
+                    foreach (var file in files)
+                        dataTransfer.Items.Add(DataTransferItem.Create(DataFormat.File, file));
                     await clipboard.SetDataAsync(dataTransfer);
-                    NotificationManager.Show(new Notification("Success", "Copy completated.", NotificationType.Success));
+                    NotificationManager.Show(new Notification("Success", "Copy completed.", NotificationType.Success));
                 }
                 else
                 {
