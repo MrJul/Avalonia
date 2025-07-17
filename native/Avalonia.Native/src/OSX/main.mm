@@ -312,7 +312,7 @@ public:
         
         @autoreleasepool
         {
-            *ppv = ::CreateClipboard (nil, nil);
+            *ppv = ::CreateClipboard(nil);
             return S_OK;
         }
     }
@@ -323,7 +323,7 @@ public:
         
         @autoreleasepool
         {
-            *ppv = ::CreateClipboard (nil, [NSPasteboardItem new]);
+            //*ppv = ::CreateClipboard (nil, [NSPasteboardItem new]);
             return S_OK;
         }
     }

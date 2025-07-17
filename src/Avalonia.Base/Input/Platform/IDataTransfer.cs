@@ -38,7 +38,7 @@ public interface IDataTransfer : IDisposable
     /// </summary>
     /// <param name="formats">
     /// If null, no filtering is going to be performed: all items in the clipboard will be returned.
-    /// If non-null, only items matching at least one format is specified.
+    /// If non-null, only items matching at least one specified format will be returned.
     /// (If an empty collection is specified, no items will be returned).
     /// </param>
     /// <returns>A list of items.</returns>
