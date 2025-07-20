@@ -1,9 +1,7 @@
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #include "common.h"
+#include "clipboard.h"
 #include "AvnString.h"
-
-@interface WritableClipboardItem : NSObject <NSPasteboardWriting>
-- (instancetype) initWithItem:(nonnull IAvnClipboardDataItem*)item source:(nonnull IAvnClipboardDataSource*)source;
-@end
 
 class Clipboard : public ComSingleObject<IAvnClipboard, &IID_IAvnClipboard>
 {
@@ -122,16 +120,16 @@ public:
         START_COM_ARP_CALL;
         
         auto count = source->GetItemCount();
-        auto writableItems = [NSMutableArray<WritableClipboardItem*> arrayWithCapacity:count];
+        auto writeableItems = [NSMutableArray<WriteableClipboardItem*> arrayWithCapacity:count];
         
         for (auto i = 0; i < count; ++i)
         {
             auto item = source->GetItem(i);
-            auto writableItem = [[WritableClipboardItem alloc] initWithItem:item source:source];
-            [writableItems addObject:writableItem];
+            auto writeableItem = [[WriteableClipboardItem alloc] initWithItem:item source:source];
+            [writeableItems addObject:writeableItem];
         }
         
-        [_pasteboard writeObjects:writableItems];
+        [_pasteboard writeObjects:writeableItems];
         return S_OK;
     }
 };
@@ -143,13 +141,13 @@ extern IAvnClipboard* CreateClipboard(NSPasteboard* pb)
 }
 
 
-@implementation WritableClipboardItem
+@implementation WriteableClipboardItem
 {
     IAvnClipboardDataItem* _item;
     IAvnClipboardDataSource* _source;
 }
     
-- (WritableClipboardItem*) initWithItem:(nonnull IAvnClipboardDataItem*)item source:(nonnull IAvnClipboardDataSource*)source
+- (nonnull WriteableClipboardItem*) initWithItem:(nonnull IAvnClipboardDataItem*)item source:(nonnull IAvnClipboardDataSource*)source
 {
     self = [super init];
     _item = item;
@@ -161,18 +159,83 @@ extern IAvnClipboard* CreateClipboard(NSPasteboard* pb)
     return self;
 }
 
+NSString* TryConvertFormatToUti(NSString* format)
+{
+    if (@available(macOS 11.0, *)) {
+        auto type = [UTType typeWithIdentifier:format];
+        if (type == nil)
+        {
+            type = [UTType typeWithMIMEType:format];
+            if (type == nil)
+                return nil;
+            
+            // For now, we need to use the deprecated UTTypeCreatePreferredIdentifierForTag to create a dynamic UTI for arbitrary strings.
+            // Ideally, the managed side should take care of only providing UTIs.
+            auto fromPasteboardType = UTTypeCreatePreferredIdentifierForTag(kUTTagClassNSPboardType, (__bridge CFStringRef)format, nil);
+            if (fromPasteboardType != nil)
+                return (__bridge_transfer NSString*)fromPasteboardType;
+        }
+        
+        return [type identifier];
+    } else {
+        auto bridgedFormat = (__bridge CFStringRef)format;
+        if (UTTypeIsDeclared(bridgedFormat))
+            return format;
+        
+        auto fromMimeType = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, bridgedFormat, nil);
+        if (fromMimeType != nil)
+            return (__bridge_transfer NSString*)fromMimeType;
+        
+        auto fromPasteboardType = UTTypeCreatePreferredIdentifierForTag(kUTTagClassNSPboardType, bridgedFormat, nil);
+        if (fromPasteboardType != nil)
+            return (__bridge_transfer NSString*)fromPasteboardType;
+        
+        return nil;
+    }
+}
+
 - (nonnull NSArray<NSPasteboardType>*) writableTypesForPasteboard:(nonnull NSPasteboard*)pasteboard
 {
-    return GetNSArrayOfStringsAndRelease(_item->ProvideFormats());
+    auto formats = _item->ProvideFormats();
+    if (formats == nullptr)
+        return [NSArray array];
+    
+    auto count = formats->GetCount();
+    if (count == 0)
+        return [NSArray array];
+    
+    auto utis = [NSMutableArray arrayWithCapacity:count];
+    IAvnString* format;
+    for (auto i = 0; i < count; ++i)
+    {
+        if (formats->Get(i, &format) != S_OK)
+            continue;
+    
+        // Only UTIs must be returned from writableTypesForPasteboard or an exception will be thrown
+        auto formatString = GetNSStringAndRelease(format);
+        auto uti = TryConvertFormatToUti(formatString);
+        if (uti != nil)
+            [utis addObject:uti];
+    }
+    formats->Release();
+    
+    [utis addObject:GetAvnCustomDataType()];
+    
+    return utis;
 }
 
 - (NSPasteboardWritingOptions) writingOptionsForType:(NSPasteboardType)type pasteboard:(NSPasteboard*)pasteboard
 {
-    return [type isEqualToString:NSPasteboardTypeString] ? 0 : NSPasteboardWritingPromised;
+    return [type isEqualToString:NSPasteboardTypeString] || [type isEqualToString:GetAvnCustomDataType()]
+        ? 0
+        : NSPasteboardWritingPromised;
 }
 
 - (nullable id) pasteboardPropertyListForType:(nonnull NSPasteboardType)type
 {
+    if ([type isEqualToString:GetAvnCustomDataType()])
+        return @"";
+    
     ComPtr<IAvnClipboardDataValue> value(_item->GetValue([type UTF8String]), true);
     if (value.getRaw() == nullptr)
         return nil;

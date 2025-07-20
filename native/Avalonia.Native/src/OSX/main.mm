@@ -316,17 +316,6 @@ public:
             return S_OK;
         }
     }
-    
-    virtual HRESULT CreateDndClipboard(IAvnClipboard** ppv) override
-    {
-        START_COM_CALL;
-        
-        @autoreleasepool
-        {
-            //*ppv = ::CreateClipboard (nil, [NSPasteboardItem new]);
-            return S_OK;
-        }
-    }
 
     virtual HRESULT CreateCursorFactory(IAvnCursorFactory** ppv) override
     {
