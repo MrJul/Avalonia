@@ -15,7 +15,7 @@ namespace ControlCatalog.Pages
         private readonly TextBlock _dropState;
 
         private readonly DataFormat _customFormat =
-            DataFormat.CreateOperatingSystemFormat("application/xxx-avalonia-controlcatalog-custom");
+            DataFormat.CreateApplicationFormat("application/xxx-avalonia-controlcatalog-custom");
 
         public DragAndDropPage()
         {
@@ -32,7 +32,7 @@ namespace ControlCatalog.Pages
             SetupDnd(
                 "Custom",
                 d => d.Items.Add(DataTransferItem.Create(_customFormat, "Test123")),
-                DragDropEffects.Move);
+                DragDropEffects.Copy | DragDropEffects.Move);
 
             SetupDnd(
                 "Files",

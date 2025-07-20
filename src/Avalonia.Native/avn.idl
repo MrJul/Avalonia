@@ -687,7 +687,6 @@ interface IAvaloniaNativeFactory : IUnknown
      HRESULT CreateStorageProvider(IAvnStorageProvider** ppv);
      HRESULT CreateScreens(IAvnScreenEvents* cb, IAvnScreens** ppv);
      HRESULT CreateClipboard(IAvnClipboard** ppv);
-     HRESULT CreateDndClipboard(IAvnClipboard** ppv);
      HRESULT CreateCursorFactory(IAvnCursorFactory** ppv);
      HRESULT ObtainGlDisplay(IAvnGlDisplay** ppv);
      HRESULT ObtainMetalDisplay(IAvnMetalDisplay** ppv);
@@ -757,8 +756,12 @@ interface IAvnWindowBase : IAvnTopLevel
      HRESULT SetMainMenu(IAvnMenu* menu);
      HRESULT ObtainNSWindowHandle([intptr]void** retOut);
      HRESULT ObtainNSWindowHandleRetained([intptr]void** retOut);
-     HRESULT BeginDragAndDropOperation(AvnDragDropEffects effects, AvnPoint point,
-                                              IAvnClipboard* clipboard, IAvnDndResultCallback* cb, [intptr]void* sourceHandle);
+     HRESULT BeginDragAndDropOperation(
+        AvnDragDropEffects effects,
+        AvnPoint point,
+        IAvnClipboardDataSource* source,
+        IAvnDndResultCallback* callback,
+        [intptr]void* sourceHandle);
 }
 
 [uuid(83e588f3-6981-4e48-9ea0-e1e569f79a91), cpp-virtual-inherits]
