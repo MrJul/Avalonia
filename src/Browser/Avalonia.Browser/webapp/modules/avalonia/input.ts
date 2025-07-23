@@ -166,9 +166,15 @@ export class InputHelper {
     }
 
     public static async writeClipboard(window: Window, source?: WriteableClipboardSource | null): Promise<void> {
+        const items = source?.items ?? [];
+        if (items.length === 0) {
+            await window.navigator.clipboard.writeText("");
+            return;
+        }
+
         return window.navigator.clipboard.write
-            ? await window.navigator.clipboard.write(source?.items.map(item => new ClipboardItem(item.data)) ?? [])
-            : await this.writeFirstText(window, source?.items ?? []);
+            ? await window.navigator.clipboard.write(items.map(item => new ClipboardItem(item.data)))
+            : await this.writeFirstText(window, items);
     }
 
     private static async writeFirstText(window: Window, items: WriteableClipboardItem[]): Promise<void> {
@@ -187,8 +193,6 @@ export class InputHelper {
                 return;
             }
         }
-
-        await window.navigator.clipboard.writeText("");
     }
 
     public static getReadableClipboardItemFormats(item: ReadableClipboardItem): readonly string[] {
