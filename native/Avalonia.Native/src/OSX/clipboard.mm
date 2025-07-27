@@ -167,16 +167,16 @@ NSString* TryConvertFormatToUti(NSString* format)
         {
             type = [UTType typeWithMIMEType:format];
             if (type == nil)
-                return nil;
-            
-            // For now, we need to use the deprecated UTTypeCreatePreferredIdentifierForTag to create a dynamic UTI for arbitrary strings.
-            // Ideally, the managed side should take care of only providing UTIs.
-            auto fromPasteboardType = UTTypeCreatePreferredIdentifierForTag(kUTTagClassNSPboardType, (__bridge CFStringRef)format, nil);
-            if (fromPasteboardType != nil)
-                return (__bridge_transfer NSString*)fromPasteboardType;
+            {
+                // For now, we need to use the deprecated UTTypeCreatePreferredIdentifierForTag to create a dynamic UTI for arbitrary strings.
+                // Ideally, the managed side should take care of only providing UTIs.
+                auto fromPasteboardType = UTTypeCreatePreferredIdentifierForTag(kUTTagClassNSPboardType, (__bridge CFStringRef)format, nil);
+                if (fromPasteboardType != nil)
+                    return (__bridge_transfer NSString*)fromPasteboardType;
+            }
         }
         
-        return [type identifier];
+        return type == nil ? nil : [type identifier];
     } else {
         auto bridgedFormat = (__bridge CFStringRef)format;
         if (UTTypeIsDeclared(bridgedFormat))
