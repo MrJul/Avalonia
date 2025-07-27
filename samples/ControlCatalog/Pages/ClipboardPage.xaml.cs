@@ -136,7 +136,7 @@ namespace ControlCatalog.Pages
         {
             if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
             {
-                var bytes = await clipboard.TryGetValueAsync<byte[]>(DataFormat.CreateOperatingSystemFormat("public.zip-archive"));
+                var bytes = await clipboard.TryGetValueAsync<byte[]>(DataFormat.CreateOperatingSystemFormat("image/png"));
                 ClipboardContent.Text = bytes is null ? "<null>" : $"{bytes.Length} bytes";
             }
         }
