@@ -111,7 +111,7 @@ internal class GlSkiaImportedImage : IPlatformRenderInterfaceImportedImage
 
     SKSurface? TryCreateSurface(int target, int textureId, int format, int width, int height, bool topLeft)
     {
-        var origin = topLeft ? GRSurfaceOrigin.TopLeft : GRSurfaceOrigin.BottomLeft; 
+        var origin = topLeft ? GRSurfaceOrigin.TopLeft : GRSurfaceOrigin.BottomLeft;
         using var texture = new GRBackendTexture(width, height, false,
             new GRGlTextureInfo((uint)target, (uint)textureId, (uint)format));
         var surf = SKSurface.Create(_gpu.GrContext, texture, origin, SKColorType.Rgba8888);
@@ -124,7 +124,7 @@ internal class GlSkiaImportedImage : IPlatformRenderInterfaceImportedImage
         return SKSurface.Create(_gpu.GrContext, unformatted, origin, SKColorType.Rgba8888);
     }
     
-    IBitmapImpl TakeSnapshot()
+    IBitmapImpl TakeSnapshot(Action? acquireMutex = null, Action? releaseMutex = null)
     {
         var width = _image?.Properties.Width ?? _sharedTexture!.Size.Width;
         var height = _image?.Properties.Height ?? _sharedTexture!.Size.Height;
@@ -132,7 +132,7 @@ internal class GlSkiaImportedImage : IPlatformRenderInterfaceImportedImage
         var textureId = _image?.TextureId ?? _sharedTexture!.TextureId;
         var topLeft = _image?.Properties.TopLeftOrigin ?? false;
         var textureType = _image?.TextureType ?? GlConsts.GL_TEXTURE_2D;
-        
+
         
         IBitmapImpl rv;
         using (var surf = TryCreateSurface(textureType, textureId, internalFormat, width, height, topLeft))
@@ -141,7 +141,7 @@ internal class GlSkiaImportedImage : IPlatformRenderInterfaceImportedImage
                 throw new OpenGlException("Unable to consume provided texture");
             var snapshot = surf.Snapshot();
             var context = _gpu.GlContext;
-            
+
             rv = new ImmutableBitmap(snapshot, () =>
             {
                 IDisposable? restoreContext = null;
@@ -158,7 +158,7 @@ internal class GlSkiaImportedImage : IPlatformRenderInterfaceImportedImage
                 {
                     snapshot.Dispose();
                 }
-            });
+            }, acquireMutex, releaseMutex);
         }
 
         _gpu.GrContext.Flush();
@@ -175,14 +175,33 @@ internal class GlSkiaImportedImage : IPlatformRenderInterfaceImportedImage
 
         using (_gpu.EnsureCurrent())
         {
-            _image.AcquireKeyedMutex(acquireIndex);
+            //_image.AcquireKeyedMutex(acquireIndex);
             try
             {
-                return TakeSnapshot();
+                var acquired = false;
+                var released = false;
+
+                return TakeSnapshot(
+                    acquireMutex: () =>
+                    {
+                        if (!acquired)
+                        {
+                            acquired = true;
+                            _image?.AcquireKeyedMutex(acquireIndex);
+                        }
+                    },
+                    releaseMutex: () =>
+                    {
+                        if (!released)
+                        {
+                            released = true;
+                            _image?.ReleaseKeyedMutex(releaseIndex);
+                        }
+                    });
             }
             finally
             {
-                _image.ReleaseKeyedMutex(releaseIndex);
+                //_image.ReleaseKeyedMutex(releaseIndex);
             }
         }
     }

@@ -1,4 +1,7 @@
 using System;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Egl;
 using Avalonia.Platform;
@@ -63,8 +66,23 @@ internal class AngleExternalMemoryD3D11Texture2D : IGlExternalImageTexture
         _mutex = null;
     }
 
-    public void AcquireKeyedMutex(uint key) => Mutex.AcquireSync(key, int.MaxValue);
-    public void ReleaseKeyedMutex(uint key) => Mutex.ReleaseSync(key);
+    [UnconditionalSuppressMessage("Trimming", "IL2026")]
+    public void AcquireKeyedMutex(uint key)
+    {
+        var caller = new StackTrace().GetFrame(1)?.GetMethod()?.Name;
+        Console.Write($"[{DateTime.Now:HH:mm:ss.fff}] Acquiring {key} on thread #{Thread.CurrentThread.ManagedThreadId} by {caller}... ");
+        Mutex.AcquireSync(key, int.MaxValue);
+        Console.WriteLine("OK");
+    }
+
+    [UnconditionalSuppressMessage("Trimming", "IL2026")]
+    public void ReleaseKeyedMutex(uint key)
+    {
+        var caller = new StackTrace().GetFrame(1)?.GetMethod()?.Name;
+        Console.Write($"[{DateTime.Now:HH:mm:ss.fff}] Releasing {key} on thread #{Thread.CurrentThread.ManagedThreadId} by {caller}... ");
+        Mutex.ReleaseSync(key);
+        Console.WriteLine("OK");
+    }
 
     public int TextureId { get; private set; }
     public int InternalFormat { get; }

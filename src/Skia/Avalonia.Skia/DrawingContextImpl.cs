@@ -43,6 +43,8 @@ namespace Avalonia.Skia
         private bool _leased;
         private bool _useOpacitySaveLayer;
 
+        public HashSet<ImmutableBitmap> MutexAcquiredBitmaps { get; } = new();
+
         /// <summary>
         /// Context create info.
         /// </summary>
@@ -774,6 +776,8 @@ namespace Avalonia.Skia
 
                 if (_grContext != null)
                 {
+                    _grContext.Flush();
+
                     Monitor.Exit(_grContext);
                     _grContext = null;
                 }
@@ -784,6 +788,11 @@ namespace Avalonia.Skia
                         disposable?.Dispose();
                     _disposables = null;
                 }
+
+                foreach (var bitmap in MutexAcquiredBitmaps)
+                    bitmap.ReleaseMutex();
+
+                MutexAcquiredBitmaps.Clear();
             }
             finally
             {
@@ -1480,7 +1489,7 @@ namespace Avalonia.Skia
             };
 
             return new SurfaceRenderTarget(createInfo);
-        }        
+        }
 
         /// <summary>
         /// Skia cached paint state.

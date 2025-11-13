@@ -15,6 +15,8 @@ namespace Avalonia.Skia
         private readonly SKImage _image;
         private readonly SKBitmap? _bitmap;
         private readonly Action? _customImageDispose = null;
+        private readonly Action? _acquireMutex;
+        private readonly Action? _releaseMutex;
 
         /// <summary>
         /// Create immutable bitmap from given stream.
@@ -40,10 +42,12 @@ namespace Avalonia.Skia
             }
         }
 
-        public ImmutableBitmap(SKImage image, Action? customImageDispose = null)
+        public ImmutableBitmap(SKImage image, Action? customImageDispose = null, Action? acquireMutex = null, Action? releaseMutex = null)
         {
             _image = image;
             _customImageDispose = customImageDispose;
+            _acquireMutex = acquireMutex;
+            _releaseMutex = releaseMutex;
             PixelSize = new PixelSize(image.Width, image.Height);
             Dpi = new Vector(96, 96);
         }
@@ -180,8 +184,13 @@ namespace Avalonia.Skia
         /// <inheritdoc />
         public void Draw(DrawingContextImpl context, SKRect sourceRect, SKRect destRect, SKSamplingOptions samplingOptions, SKPaint paint)
         {
+            if (context.MutexAcquiredBitmaps.Add(this))
+                _acquireMutex?.Invoke();
+
             context.Canvas.DrawImage(_image, sourceRect, destRect, samplingOptions, paint);
         }
+
+        public void ReleaseMutex() => _releaseMutex?.Invoke();
 
         public PixelFormat? Format => _bitmap?.ColorType.ToAvalonia();
 
