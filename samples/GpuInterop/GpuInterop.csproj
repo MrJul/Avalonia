@@ -5,7 +5,6 @@
     <TargetFramework>$(AvsCurrentTargetFramework)</TargetFramework>
     <TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>
     <Nullable>enable</Nullable>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <UseD3DCompiler>true</UseD3DCompiler>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>

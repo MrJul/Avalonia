@@ -63,7 +63,7 @@ namespace Avalonia.LeakTests
 
             Action completeSource = () =>
             {
-                ((ISubject<string>)weakSource.Target).OnCompleted();
+                ((ISubject<string>)weakSource.Target!).OnCompleted();
             };
 
             completeSource();
