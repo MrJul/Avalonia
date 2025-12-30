@@ -11,7 +11,7 @@ namespace Avalonia.DesignerSupport.Remote
     {
         private readonly string _appPath;
         private string _path;
-        private string _lastContents;
+        private string? _lastContents;
         private bool _disposed;
 
         public FileWatcherTransport(Uri file, string appPath)
@@ -49,7 +49,8 @@ namespace Avalonia.DesignerSupport.Remote
             return Task.CompletedTask;
         }
 
-        private Action<IAvaloniaRemoteTransportConnection, object> _onMessage;
+        private Action<IAvaloniaRemoteTransportConnection, object>? _onMessage;
+
         public event Action<IAvaloniaRemoteTransportConnection, object> OnMessage
         {
             add
@@ -60,6 +61,7 @@ namespace Avalonia.DesignerSupport.Remote
         }
 
         public event Action<IAvaloniaRemoteTransportConnection, Exception> OnException { add { } remove { } }
+
         public void Start()
         {
             UpdaterThread();

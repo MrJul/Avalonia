@@ -12,4 +12,5 @@
     <Compile Include="..\Avalonia.Base\Compatibility\TrimmingAttributes.cs" Visible="False" />
   </ItemGroup>
   <Import Project="..\..\build\TrimmingEnable.props" />
+  <Import Project="..\..\build\NullableEnable.props" />
 </Project>

@@ -9,6 +9,7 @@
     <Version>0.7.0</Version>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
     <NugetPackageName>Avalonia</NugetPackageName>
     <WebAppDir>$(MSBuildThisFileDirectory)Remote/HtmlTransport/webapp</WebAppDir>
   </PropertyGroup>

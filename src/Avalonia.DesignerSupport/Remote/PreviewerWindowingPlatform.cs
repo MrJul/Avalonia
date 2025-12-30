@@ -13,12 +13,12 @@ namespace Avalonia.DesignerSupport.Remote
     class PreviewerWindowingPlatform : IWindowingPlatform
     {
         static readonly IKeyboardDevice Keyboard = new KeyboardDevice();
-        private static IAvaloniaRemoteTransportConnection s_transport;
-        private static DetachableTransportConnection s_lastWindowTransport;
-        private static PreviewerWindowImpl s_lastWindow;
+        private static IAvaloniaRemoteTransportConnection? s_transport;
+        private static DetachableTransportConnection? s_lastWindowTransport;
+        private static PreviewerWindowImpl? s_lastWindow;
         public static List<object> PreFlightMessages = new List<object>();
 
-        public ITrayIconImpl CreateTrayIcon() => null;
+        public ITrayIconImpl? CreateTrayIcon() => null;
 
         public IWindowImpl CreateWindow() => new WindowStub();
         public ITopLevelImpl CreateEmbeddableTopLevel() => CreateEmbeddableWindow();
@@ -27,7 +27,7 @@ namespace Avalonia.DesignerSupport.Remote
         {
             if (s_lastWindow != null)
             {
-                s_lastWindowTransport.Dispose();
+                s_lastWindowTransport!.Dispose();
                 try
                 {
                     s_lastWindow.Dispose();
@@ -38,7 +38,7 @@ namespace Avalonia.DesignerSupport.Remote
                 }
             }
             s_lastWindow =
-                new PreviewerWindowImpl(s_lastWindowTransport = new DetachableTransportConnection(s_transport));
+                new PreviewerWindowImpl(s_lastWindowTransport = new DetachableTransportConnection(s_transport!));
             foreach (var pf in PreFlightMessages)
                 s_lastWindowTransport.FireOnMessage(s_lastWindowTransport, pf);
             return s_lastWindow;

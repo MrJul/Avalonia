@@ -39,12 +39,12 @@ namespace Avalonia.DesignerSupport.Remote
 
         public override double DesktopScaling => 1.0;
         public PixelPoint Position { get; set; }
-        public Action<PixelPoint> PositionChanged { get; set; }
-        public Action Deactivated { get; set; }
-        public Action Activated { get; set; }
-        public Func<WindowCloseReason, bool> Closing { get; set; }
+        public Action<PixelPoint>? PositionChanged { get; set; }
+        public Action? Deactivated { get; set; }
+        public Action? Activated { get; set; }
+        public Func<WindowCloseReason, bool>? Closing { get; set; }
         public WindowState WindowState { get; set; }
-        public Action<WindowState> WindowStateChanged { get; set; }
+        public Action<WindowState>? WindowStateChanged { get; set; }
         public Size MaxAutoSizeHint { get; } = new Size(4096, 4096);
 
         protected override void OnMessage(IAvaloniaRemoteTransportConnection transport, object obj)
@@ -88,19 +88,19 @@ namespace Avalonia.DesignerSupport.Remote
         {
         }
 
-        public Action GotInputWhenDisabled { get; set; }        
+        public Action? GotInputWhenDisabled { get; set; }
         
-        public Action<bool> ExtendClientAreaToDecorationsChanged { get; set; }
+        public Action<bool>? ExtendClientAreaToDecorationsChanged { get; set; }
 
-        public Thickness ExtendedMargins { get; } = new Thickness();
+        public Thickness ExtendedMargins => default;
 
-        public bool IsClientAreaExtendedToDecorations { get; }
+        public bool IsClientAreaExtendedToDecorations => false;
 
-        public Thickness OffScreenMargin { get; } = new Thickness();
+        public Thickness OffScreenMargin => default;
 
         public bool NeedsManagedDecorations => false;
 
-        public override object TryGetFeature(Type featureType)
+        public override object? TryGetFeature(Type featureType)
         {
             if (featureType == typeof(IStorageProvider))
             {
@@ -119,7 +119,7 @@ namespace Avalonia.DesignerSupport.Remote
         {
         }
         
-        public void SetTitle(string title)
+        public void SetTitle(string? title)
         {
         }
 
@@ -127,7 +127,7 @@ namespace Avalonia.DesignerSupport.Remote
         {
         }
 
-        public void SetIcon(IWindowIconImpl icon)
+        public void SetIcon(IWindowIconImpl? icon)
         {
         }
 
@@ -151,7 +151,7 @@ namespace Avalonia.DesignerSupport.Remote
         {
         }
 
-        public void SetParent(IWindowImpl parent)
+        public void SetParent(IWindowImpl? parent)
         {
         }
 

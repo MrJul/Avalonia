@@ -489,7 +489,7 @@ namespace Metsys.Bson
 {
     internal class ObjectId
     {
-        private string _string;
+        private string? _string;
 
         public ObjectId()
         {
@@ -509,7 +509,7 @@ namespace Metsys.Bson
             get { return new ObjectId("000000000000000000000000"); }
         }
 
-        public byte[] Value { get; private set; }
+        public byte[]? Value { get; private set; }
 
         public static ObjectId NewObjectId()
         {
@@ -536,14 +536,14 @@ namespace Metsys.Bson
             }
         }
 
-        public static bool operator ==(ObjectId a, ObjectId b)
+        public static bool operator ==(ObjectId? a, ObjectId? b)
         {
             if (ReferenceEquals(a, b))
             {
                 return true;
             }
 
-            if (((object)a == null) || ((object)b == null))
+            if (a is null || b is null)
             {
                 return false;
             }
@@ -558,10 +558,10 @@ namespace Metsys.Bson
 
         public override int GetHashCode()
         {
-            return Value != null ? ToString().GetHashCode() : 0;
+            return Value != null ? (ToString()?.GetHashCode() ?? 0) : 0;
         }
 
-        public override string ToString()
+        public override string? ToString()
         {
             if (_string == null && Value != null)
             {
@@ -571,13 +571,13 @@ namespace Metsys.Bson
             return _string;
         }
 
-        public override bool Equals(object o)
+        public override bool Equals(object? o)
         {
             var other = o as ObjectId;
             return Equals(other);
         }
 
-        public bool Equals(ObjectId other)
+        public bool Equals(ObjectId? other)
         {
             return other != null && ToString() == other.ToString();
         }
@@ -596,9 +596,9 @@ namespace Metsys.Bson
             return bytes;
         }
 
-        public static implicit operator string(ObjectId oid)
+        public static implicit operator string?(ObjectId? oid)
         {
-            return oid == null ? null : oid.ToString();
+            return oid?.ToString();
         }
         public static implicit operator ObjectId(string oidString)
         {
@@ -611,7 +611,7 @@ namespace Metsys.Bson
 {
     public interface IExpando
     {
-        IDictionary<string, object> Expando { get; }
+        IDictionary<string, object?> Expando { get; }
     }
 }
 
@@ -643,9 +643,9 @@ namespace Metsys.Bson
             get { return _ignoredIfNull; }
         }
 
-        public Action<object, object> Setter { get; private set; }
+        public Action<object, object?>? Setter { get; private set; }
 
-        public Func<object, object> Getter { get; private set; }
+        public Func<object, object?> Getter { get; private set; }
 
         public MagicProperty(PropertyInfo property, string name, bool ignored, bool ignoredIfNull)
         {
@@ -657,34 +657,34 @@ namespace Metsys.Bson
             Setter = CreateSetterMethod(property);
         }
 
-        private static Action<object, object> CreateSetterMethod(PropertyInfo property)
+        private static Action<object, object?>? CreateSetterMethod(PropertyInfo property)
         {
-            var genericHelper = typeof(MagicProperty).GetMethod("SetterMethod", BindingFlags.Static | BindingFlags.NonPublic);
-            var constructedHelper = genericHelper.MakeGenericMethod(property.DeclaringType, property.PropertyType);
-            return (Action<object, object>)constructedHelper.Invoke(null, new object[] { property });
+            var genericHelper = typeof(MagicProperty).GetMethod(nameof(SetterMethod), BindingFlags.Static | BindingFlags.NonPublic)!;
+            var constructedHelper = genericHelper.MakeGenericMethod(property.DeclaringType!, property.PropertyType);
+            return (Action<object, object?>?)constructedHelper.Invoke(null, new object?[] { property })!;
         }
 
-        private static Func<object, object> CreateGetterMethod(PropertyInfo property)
+        private static Func<object, object?> CreateGetterMethod(PropertyInfo property)
         {
-            var genericHelper = typeof(MagicProperty).GetMethod("GetterMethod", BindingFlags.Static | BindingFlags.NonPublic);
-            var constructedHelper = genericHelper.MakeGenericMethod(property.DeclaringType, property.PropertyType);
-            return (Func<object, object>)constructedHelper.Invoke(null, new object[] { property });
+            var genericHelper = typeof(MagicProperty).GetMethod(nameof(GetterMethod), BindingFlags.Static | BindingFlags.NonPublic)!;
+            var constructedHelper = genericHelper.MakeGenericMethod(property.DeclaringType!, property.PropertyType);
+            return (Func<object, object?>)constructedHelper.Invoke(null, new object?[] { property })!;
         }
 
         //called via reflection       
-        private static Action<object, object> SetterMethod<TTarget, TParam>(PropertyInfo method) where TTarget : class
+        private static Action<object, object?>? SetterMethod<TTarget, TParam>(PropertyInfo method) where TTarget : class
         {
             var m = method.GetSetMethod(true);
             if (m == null) { return null; } //no setter
             var func = (Action<TTarget, TParam>)Delegate.CreateDelegate(typeof(Action<TTarget, TParam>), m);
-            return (target, param) => func((TTarget)target, (TParam)param);
+            return (target, param) => func((TTarget)target, (TParam)param!);
         }
 
         //called via reflection
-        private static Func<object, object> GetterMethod<TTarget, TParam>(PropertyInfo method) where TTarget : class
+        private static Func<object, object?> GetterMethod<TTarget, TParam>(PropertyInfo method) where TTarget : class
         {
             var m = method.GetGetMethod(true);
-            var func = (Func<TTarget, TParam>)Delegate.CreateDelegate(typeof(Func<TTarget, TParam>), m);
+            var func = (Func<TTarget, TParam>)Delegate.CreateDelegate(typeof(Func<TTarget, TParam>), m!);
             return target => func((TTarget)target);
         }
     }
@@ -711,14 +711,14 @@ namespace Metsys.Bson
             }
         }
 
-        public MagicProperty Expando { get; private set; }
+        public MagicProperty? Expando { get; private set; }
 
         public ICollection<MagicProperty> GetProperties()
         {
             return _properties.Values;
         }
 
-        public MagicProperty FindProperty(string name)
+        public MagicProperty? FindProperty(string name)
         {
             _properties.TryGetValue(name, out var property);
             return property;
@@ -729,7 +729,7 @@ namespace Metsys.Bson
             return _cachedTypeLookup.GetOrAdd(type, t => new TypeHelper(t));
         }
 
-        public static string FindProperty(LambdaExpression lambdaExpression)
+        public static string? FindProperty(LambdaExpression lambdaExpression)
         {
             Expression expressionToCheck = lambdaExpression;
 
@@ -749,7 +749,7 @@ namespace Metsys.Bson
                     case ExpressionType.MemberAccess:
                         var memberExpression = (MemberExpression)expressionToCheck;
 
-                        if (memberExpression.Expression.NodeType != ExpressionType.Parameter && memberExpression.Expression.NodeType != ExpressionType.Convert)
+                        if (memberExpression.Expression?.NodeType is not (ExpressionType.Parameter or ExpressionType.Convert))
                         {
                             throw new ArgumentException($"Expression '{lambdaExpression}' must resolve to top-level member.", nameof(lambdaExpression));
                         }
@@ -793,7 +793,7 @@ namespace Metsys.Bson
     [UnconditionalSuppressMessage("Trimming", "IL3050", Justification = "Bson uses reflection")]
     internal class ListWrapper : BaseWrapper
     {
-        private IList _list;
+        private IList? _list;
 
         public override object Collection
         {
@@ -804,7 +804,7 @@ namespace Metsys.Bson
             _list.Add(value);
         }
 
-        protected override object CreateContainer(Type type, Type itemType)
+        protected override object? CreateContainer(Type type, Type itemType)
         {
             if (type.IsInterface)
             {
@@ -816,7 +816,7 @@ namespace Metsys.Bson
             }
             return null;
         }
-        protected override void SetContainer(object container)
+        protected override void SetContainer(object? container)
         {
             _list = container == null ? new ArrayList() : (IList)container;
         }
@@ -948,11 +948,11 @@ namespace Metsys.Bson
             throw new BsonException($"Collection of type {type.FullName} cannot be deserialized");
         }
 
-        public abstract void Add(object value);
+        public abstract void Add(object? value);
         public abstract object Collection { get; }
 
-        protected abstract object CreateContainer(Type type, Type itemType);
-        protected abstract void SetContainer(object container);
+        protected abstract object? CreateContainer(Type type, Type itemType);
+        protected abstract void SetContainer(object? container);
     }
 }
 

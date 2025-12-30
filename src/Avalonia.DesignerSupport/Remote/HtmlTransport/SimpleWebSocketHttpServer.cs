@@ -15,7 +15,7 @@ namespace Avalonia.DesignerSupport.Remote.HtmlTransport
     {
         private readonly IPAddress _address;
         private readonly int _port;
-        private TcpListener _listener;
+        private TcpListener? _listener;
 
         public async Task<SimpleWebSocketHttpRequest> AcceptAsync()
         {
@@ -26,7 +26,7 @@ namespace Avalonia.DesignerSupport.Remote.HtmlTransport
                     return res;
             }
         }
-        async Task<SimpleWebSocketHttpRequest> AcceptAsyncImpl()
+        async Task<SimpleWebSocketHttpRequest?> AcceptAsyncImpl()
         {
             if (_listener == null)
                 throw new InvalidOperationException("Currently not listening");
@@ -59,7 +59,7 @@ namespace Avalonia.DesignerSupport.Remote.HtmlTransport
             }
 
             var headers = new Dictionary<string, string>();
-            string line = null;
+            string? line;
             try
             {
 
@@ -120,10 +120,10 @@ namespace Avalonia.DesignerSupport.Remote.HtmlTransport
     {
         public Dictionary<string, string> Headers { get; }
         public string Path { get; }
-        private NetworkStream _stream;
+        private NetworkStream? _stream;
         public bool IsWebsocketRequest { get; }
-        public IReadOnlyList<string> WebSocketProtocols { get; }
-        private string _websocketKey;
+        public IReadOnlyList<string>? WebSocketProtocols { get; }
+        private string? _websocketKey;
 
         public SimpleWebSocketHttpRequest(NetworkStream stream, string path, Dictionary<string, string> headers)
         {
@@ -146,6 +146,8 @@ namespace Avalonia.DesignerSupport.Remote.HtmlTransport
 
         public async Task RespondAsync(int code, byte[] data, string contentType)
         {
+            ObjectDisposedException.ThrowIf(_stream is null, this);
+
             var headers = Encoding.UTF8.GetBytes(FormattableString.Invariant($"HTTP/1.1 {code} {(HttpStatusCode)code}\r\nConnection: close\r\nContent-Type: {contentType}\r\nContent-Length: {data.Length}\r\n\r\n"));
             await _stream.WriteAsync(headers, 0, headers.Length);
             await _stream.WriteAsync(data, 0, data.Length);
@@ -155,8 +157,9 @@ namespace Avalonia.DesignerSupport.Remote.HtmlTransport
         }
 
 
-        public async Task<SimpleWebSocket> AcceptWebSocket(string protocol = null)
+        public async Task<SimpleWebSocket> AcceptWebSocket(string? protocol = null)
         {
+            ObjectDisposedException.ThrowIf(_stream is null, this);
             
             var handshakeSource = _websocketKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
             string handshake;
@@ -219,7 +222,7 @@ namespace Avalonia.DesignerSupport.Remote.HtmlTransport
 
             class Lock : IDisposable
             {
-                private  AsyncLock _parent;
+                private AsyncLock? _parent;
                 private object _syncRoot = new object();
 
                 public Lock(AsyncLock parent)
@@ -241,7 +244,7 @@ namespace Avalonia.DesignerSupport.Remote.HtmlTransport
             }
         }
         
-        private Stream _stream;
+        private Stream? _stream;
         private AsyncLock _sendLock = new AsyncLock();
         private AsyncLock _recvLock = new AsyncLock();
         private const int WebsocketInitialHeaderLength = 2;
@@ -299,6 +302,8 @@ namespace Avalonia.DesignerSupport.Remote.HtmlTransport
 
         async Task SendFrame(FrameType type, byte[] data, int offset, int length)
         {
+            ObjectDisposedException.ThrowIf(_stream is null, this);
+
             using (var l = await _sendLock.LockAsync())
             {
                 var header = new WebSocketHeader();
@@ -462,11 +467,11 @@ namespace Avalonia.DesignerSupport.Remote.HtmlTransport
     public class SimpleWebSocketMessage
     {
         public bool IsText { get; set; }
-        public byte[] Data { get; set; }
+        public byte[]? Data { get; set; }
 
         public string AsString()
         {
-            return Encoding.UTF8.GetString(Data);
+            return Encoding.UTF8.GetString(Data ?? []);
         }
     }
 }

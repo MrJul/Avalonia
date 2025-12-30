@@ -6,7 +6,7 @@ namespace Avalonia.DesignerSupport.Remote
 {
     class DetachableTransportConnection : IAvaloniaRemoteTransportConnection
     {
-        private IAvaloniaRemoteTransportConnection _inner;
+        private IAvaloniaRemoteTransportConnection? _inner;
 
         public DetachableTransportConnection(IAvaloniaRemoteTransportConnection inner)
         {
@@ -25,12 +25,12 @@ namespace Avalonia.DesignerSupport.Remote
         
         public Task Send(object data)
         {
-            return _inner?.Send(data);
+            return _inner?.Send(data) ?? Task.CompletedTask;
         }
 
-        public event Action<IAvaloniaRemoteTransportConnection, object> OnMessage;
+        public event Action<IAvaloniaRemoteTransportConnection, object>? OnMessage;
 
-        public event Action<IAvaloniaRemoteTransportConnection, Exception> OnException
+        public event Action<IAvaloniaRemoteTransportConnection, Exception>? OnException
         {
             add {}
             remove {}

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Reflection;
 using System.Threading;
@@ -14,17 +15,17 @@ namespace Avalonia.DesignerSupport.Remote
 {
     public class RemoteDesignerEntryPoint
     {
-        private static ClientSupportedPixelFormatsMessage s_supportedPixelFormats;
-        private static ClientViewportAllocatedMessage s_viewportAllocatedMessage;
-        private static ClientRenderInfoMessage s_renderInfoMessage;
+        private static ClientSupportedPixelFormatsMessage? s_supportedPixelFormats;
+        private static ClientViewportAllocatedMessage? s_viewportAllocatedMessage;
+        private static ClientRenderInfoMessage? s_renderInfoMessage;
         private static double s_lastRenderScaling = 1.0;
+        private static IAvaloniaRemoteTransportConnection? s_transport;
 
-        private static IAvaloniaRemoteTransportConnection s_transport;
         class CommandLineArgs
         {
-            public string AppPath { get; set; }
-            public Uri Transport { get; set; }
-            public Uri HtmlMethodListenUri { get; set; }
+            public string? AppPath { get; set; }
+            public Uri? Transport { get; set; }
+            public Uri? HtmlMethodListenUri { get; set; }
             public string Method { get; set; } = Methods.AvaloniaRemote;
             public string SessionId { get; set; } = Guid.NewGuid().ToString();
         }
@@ -36,7 +37,8 @@ namespace Avalonia.DesignerSupport.Remote
             public const string Html = "html";
         }
 
-        static Exception Die(string error)
+        [DoesNotReturn]
+        static Exception Die(string? error)
         {
             if (error != null)
             {
@@ -49,6 +51,7 @@ namespace Avalonia.DesignerSupport.Remote
 
         static void Log(string message) => Console.WriteLine(message);
 
+        [DoesNotReturn]
         static Exception PrintUsage()
         {
             Console.Error.WriteLine("Usage: --transport transport_spec --session-id sid --method method app");
@@ -74,7 +77,7 @@ namespace Avalonia.DesignerSupport.Remote
         static CommandLineArgs ParseCommandLineArgs(string[] args)
         {
             var rv = new CommandLineArgs();
-            Action<string> next = null;
+            Action<string>? next = null;
             try
             {
                 foreach (var arg in args)
@@ -111,9 +114,9 @@ namespace Avalonia.DesignerSupport.Remote
             return rv;
         }
 
-        static IAvaloniaRemoteTransportConnection CreateTransport(CommandLineArgs args)
+        static IAvaloniaRemoteTransportConnection? CreateTransport(CommandLineArgs args)
         {
-            var transport = args.Transport;
+            var transport = args.Transport!;
             if (transport.Scheme == "tcp-bson")
             {
                 return new BsonTcpTransport().Connect(IPAddress.Parse(transport.Host), transport.Port).Result;
@@ -121,7 +124,7 @@ namespace Avalonia.DesignerSupport.Remote
 
             if (transport.Scheme == "file")
             {
-                return new FileWatcherTransport(transport, args.AppPath);
+                return new FileWatcherTransport(transport, args.AppPath!);
             }
             PrintUsage();
             return null;
@@ -169,17 +172,17 @@ namespace Avalonia.DesignerSupport.Remote
         public static void Main(string[] cmdline)
         {
             var args = ParseCommandLineArgs(cmdline);
-            var transport = CreateTransport(args);
+            var transport = CreateTransport(args)!;
             if (transport is ITransportWithEnforcedMethod enforcedMethod)
                 args.Method = enforcedMethod.PreviewerMethod;
-            var asm = Assembly.LoadFrom(System.IO.Path.GetFullPath(args.AppPath));
+            var asm = Assembly.LoadFrom(System.IO.Path.GetFullPath(args.AppPath!));
             var entryPoint = asm.EntryPoint ?? throw Die($"Assembly {args.AppPath} doesn't have an entry point");
             Log($"Initializing application in design mode");
             Design.IsDesignMode = true;
             Log($"Obtaining AppBuilder instance from {entryPoint.DeclaringType!.FullName}");
             var appBuilder = AppBuilder.Configure(entryPoint.DeclaringType);
             var initializer =(IAppInitializer)Activator.CreateInstance(typeof(AppInitializer));
-            transport = initializer.ConfigureApp(transport, args, appBuilder);
+            transport = initializer!.ConfigureApp(transport, args, appBuilder);
             s_transport = transport;
             transport.OnMessage += OnTransportMessage;
             transport.OnException += (t, e) => Die(e.ToString());
@@ -201,7 +204,8 @@ namespace Avalonia.DesignerSupport.Remote
             };
         }
 
-        private static Window s_currentWindow;
+        private static Window? s_currentWindow;
+
         private static void OnTransportMessage(IAvaloniaRemoteTransportConnection transport, object obj) => Dispatcher.UIThread.Post(static arg =>
         {
             if (arg is ClientSupportedPixelFormatsMessage formats)
