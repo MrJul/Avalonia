@@ -25,6 +25,9 @@ internal sealed class PasteboardItemToDataTransferItemWrapper(NSDictionary item)
 
     protected override object? TryGetRawCore(DataFormat format)
     {
+        if (format.Kind == DataFormatKind.InProcess)
+            return null;
+
         // Handle images specially without ToSystemType, as we may have multiple UTI types for images.
         if (DataFormat.Bitmap.Equals(format))
         {

@@ -79,6 +79,9 @@ internal sealed class ClipboardImpl(UIPasteboard pasteboard)
 
     private async Task<NSObject?> TryGetFoundationDataAsync(IAsyncDataTransferItem dataTransferItem, DataFormat format)
     {
+        if (format.Kind == DataFormatKind.InProcess)
+            return null;
+
         if (format.Equals(DataFormat.Text))
         {
             var text = await dataTransferItem.TryGetValueAsync(DataFormat.Text) ?? string.Empty;
