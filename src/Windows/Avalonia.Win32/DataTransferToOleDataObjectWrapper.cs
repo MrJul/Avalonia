@@ -45,7 +45,7 @@ internal class DataTransferToOleDataObjectWrapper(IDataTransfer dataTransfer)
             }
             else
             {
-                formats.AddRange(dataFormats.Select(x => OleDataObjectHelper.ToFormatEtc(x)));
+                formats.AddRange(dataFormats.Where(x => x.Kind != DataFormatKind.InProcess).Select(x => x.ToFormatEtc()));
             }
 
             _formats = formats.ToArray();

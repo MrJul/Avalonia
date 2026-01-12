@@ -36,7 +36,7 @@ namespace Avalonia.Win32
             {
                 if (--i == 0)
                     throw new TimeoutException("Timeout opening clipboard.");
-                await Task.Delay(100);
+                await Task.Delay(OleRetryDelay);
             }
 
             return Disposable.Create(() => UnmanagedMethods.CloseClipboard());

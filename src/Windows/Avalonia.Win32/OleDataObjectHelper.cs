@@ -36,6 +36,9 @@ internal static class OleDataObjectHelper
 
     public static unsafe object? TryGet(this Win32Com.IDataObject oleDataObject, DataFormat format)
     {
+        if (format.Kind == DataFormatKind.InProcess)
+            return null;
+
         var formatEtc = format.ToFormatEtc();
 
         if (oleDataObject.QueryGetData(&formatEtc) != (uint)HRESULT.S_OK)
@@ -161,6 +164,9 @@ internal static class OleDataObjectHelper
 
     public unsafe static object? ReadDataFromHGlobal(DataFormat format, IntPtr hGlobal, FORMATETC formatEtc)
     {
+        if (format.Kind == DataFormatKind.InProcess)
+            return null;
+
         if (DataFormat.Text.Equals(format))
             return ReadStringFromHGlobal(hGlobal);
 
