@@ -62,7 +62,7 @@ public abstract class DataFormat : IEquatable<DataFormat>
         {
             DataFormatKind.Application => applicationPrefix + Identifier,
             DataFormatKind.Platform => Identifier,
-            _ => throw new InvalidOperationException($"Cannot get system name for universal format {Identifier}")
+            _ => throw new InvalidOperationException($"Cannot get system name for {Kind} format {Identifier}")
         };
     }
 
@@ -117,7 +117,7 @@ public abstract class DataFormat : IEquatable<DataFormat>
     /// </para>
     /// <para>Only ASCII letters (A-Z, a-z), digits (0-9), the dot (.) and the hyphen (-) are accepted.</para>
     /// </param>
-    /// <returns>A new <see cref="DataFormat"/>.</returns>
+    /// <returns>A new <see cref="DataFormat{T}"/>.</returns>
     public static DataFormat<byte[]> CreateBytesApplicationFormat(string identifier)
         => CreateApplicationFormat<byte[]>(identifier);
 
@@ -133,7 +133,7 @@ public abstract class DataFormat : IEquatable<DataFormat>
     /// </para>
     /// <para>Only ASCII letters (A-Z, a-z), digits (0-9), the dot (.) and the hyphen (-) are accepted.</para>
     /// </param>
-    /// <returns>A new <see cref="DataFormat"/>.</returns>
+    /// <returns>A new <see cref="DataFormat{T}"/>.</returns>
     public static DataFormat<string> CreateStringApplicationFormat(string identifier)
         => CreateApplicationFormat<string>(identifier);
 
@@ -153,7 +153,7 @@ public abstract class DataFormat : IEquatable<DataFormat>
     /// The format identifier. This value is not validated and is passed AS IS to the underlying platform.
     /// Most systems use mime types, but macOS requires Uniform Type Identifiers (UTI).
     /// </param>
-    /// <returns>A new <see cref="DataFormat"/>.</returns>
+    /// <returns>A new <see cref="DataFormat{T}"/>.</returns>
     public static DataFormat<byte[]> CreateBytesPlatformFormat(string identifier)
         => CreatePlatformFormat<byte[]>(identifier);
 
@@ -164,7 +164,7 @@ public abstract class DataFormat : IEquatable<DataFormat>
     /// The format identifier. This value is not validated and is passed AS IS to the underlying platform.
     /// Most systems use mime types, but macOS requires Uniform Type Identifiers (UTI).
     /// </param>
-    /// <returns>A new <see cref="DataFormat"/>.</returns>
+    /// <returns>A new <see cref="DataFormat{T}"/>.</returns>
     public static DataFormat<string> CreateStringPlatformFormat(string identifier)
         => CreatePlatformFormat<string>(identifier);
 
@@ -174,6 +174,22 @@ public abstract class DataFormat : IEquatable<DataFormat>
         ThrowHelper.ThrowIfNullOrEmpty(identifier);
 
         return new(DataFormatKind.Platform, identifier);
+    }
+
+    /// <summary>
+    /// Creates a new format for the current process.
+    /// Such a format won't be placed on the system clipboard or drag-and-drop object,
+    /// making it unavailable to other processes.
+    /// </summary>
+    /// <param name="identifier">The format identifier. This value is not passed to the underlying platform.</param>
+    /// <typeparam name="T">The data type.</typeparam>
+    /// <returns>A new <see cref="DataFormat{T}"/>.</returns>
+    public static DataFormat<T> CreateInProcessFormat<T>(string identifier)
+        where T : class
+    {
+        ThrowHelper.ThrowIfNullOrEmpty(identifier);
+
+        return new(DataFormatKind.InProcess, identifier);
     }
 
     /// <summary>
