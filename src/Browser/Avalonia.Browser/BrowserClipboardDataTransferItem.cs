@@ -23,6 +23,9 @@ internal sealed class BrowserClipboardDataTransferItem(JSObject readableDataItem
 
     protected override async Task<object?> TryGetRawCoreAsync(DataFormat format)
     {
+        if (format.Kind == DataFormatKind.InProcess)
+            return null;
+
         string formatString = BrowserDataFormatHelper.ToBrowserFormat(format);
 
         var value = await InputHelper.TryGetReadableDataItemValueAsync(_readableDataItem, formatString)

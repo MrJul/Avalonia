@@ -21,6 +21,9 @@ internal sealed class BrowserDragDataTransferItem(JSObject readableDataItem)
 
     protected override object? TryGetRawCore(DataFormat format)
     {
+        if (format.Kind == DataFormatKind.InProcess)
+            return null;
+
         var formatString = BrowserDataFormatHelper.ToBrowserFormat(format);
         var value = InputHelper.TryGetReadableDataItemValue(_readableDataItem, formatString);
         return BrowserDataTransferHelper.TryGetValue(value, format);
