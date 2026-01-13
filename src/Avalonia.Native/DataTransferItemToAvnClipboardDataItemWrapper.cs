@@ -18,12 +18,17 @@ internal sealed class DataTransferItemToAvnClipboardDataItemWrapper(IDataTransfe
     private readonly IDataTransferItem _item = item;
 
     IAvnStringArray IAvnClipboardDataItem.ProvideFormats()
-        => new AvnStringArray(_item.Formats.Select(ClipboardDataFormatHelper.ToNativeFormat));
+        => new AvnStringArray(_item.Formats
+            .Where(format => format.Kind != DataFormatKind.InProcess)
+            .Select(ClipboardDataFormatHelper.ToNativeFormat));
 
     IAvnClipboardDataValue? IAvnClipboardDataItem.GetValue(string format)
     {
         if (FindDataFormat(format) is { } dataFormat)
         {
+            if (dataFormat.Kind == DataFormatKind.InProcess)
+                return null;
+
             if (DataFormat.Text.Equals(dataFormat))
                 return new StringValue(_item.TryGetValue(DataFormat.Text) ?? string.Empty);
 

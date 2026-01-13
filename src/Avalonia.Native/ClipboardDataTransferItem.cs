@@ -28,6 +28,9 @@ internal sealed class ClipboardDataTransferItem(ClipboardReadSession session, in
 
     protected override object? TryGetRawCore(DataFormat format)
     {
+        if (format.Kind == DataFormatKind.InProcess)
+            return null;
+
         var nativeFormat = ClipboardDataFormatHelper.ToNativeFormat(format);
 
         if (DataFormat.Text.Equals(format))
