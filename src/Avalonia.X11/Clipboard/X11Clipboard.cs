@@ -147,6 +147,9 @@ namespace Avalonia.X11.Clipboard
 
         private byte[]? TryGetDataAsBytes(IAsyncDataTransfer dataTransfer, DataFormat format, IntPtr targetFormatAtom)
         {
+            if (format.Kind == DataFormatKind.InProcess)
+                return null;
+
             if (DataFormat.Text.Equals(format))
             {
                 var text = dataTransfer.TryGetValueAsync(DataFormat.Text).GetAwaiter().GetResult();

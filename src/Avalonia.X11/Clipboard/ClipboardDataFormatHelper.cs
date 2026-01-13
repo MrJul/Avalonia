@@ -43,6 +43,9 @@ internal static class ClipboardDataFormatHelper
 
     public static IntPtr ToAtom(DataFormat format, IntPtr[] textFormatAtoms, X11Atoms atoms, DataFormat[] dataFormats)
     {
+        if (format.Kind == DataFormatKind.InProcess)
+            return IntPtr.Zero;
+
         if (DataFormat.Text.Equals(format))
             return GetPreferredStringFormatAtom(textFormatAtoms, atoms);
 
@@ -77,6 +80,9 @@ internal static class ClipboardDataFormatHelper
 
     public static IntPtr[] ToAtoms(DataFormat format, IntPtr[] textFormatAtoms, X11Atoms atoms)
     {
+        if (format.Kind == DataFormatKind.InProcess)
+            return [];
+
         if (DataFormat.Text.Equals(format))
             return textFormatAtoms;
 
