@@ -277,7 +277,10 @@ namespace Avalonia.X11
             });
 
             if (AvaloniaLocator.Current.GetService<IDragDropDevice>() is { } dragDropDevice)
+            {
+                DragDropDevice = dragDropDevice;
                 _dropTarget = new X11DropTarget(dragDropDevice, this, _x11.Display, _x11.Atoms);
+            }
 
             platform.X11Screens.Changed += OnScreensChanged;
         }
@@ -515,6 +518,8 @@ namespace Avalonia.X11
         public Action? LostFocus { get; set; }
 
         public Compositor Compositor => _platform.Compositor;
+
+        public IDragDropDevice? DragDropDevice { get; }
         
         private void OnEvent(ref XEvent ev)
         {
