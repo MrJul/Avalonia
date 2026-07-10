@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using System.IO;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace Avalonia.Platform.Storage;
@@ -41,13 +41,41 @@ public sealed class FilePickerFileType(string? name)
 
     internal IReadOnlyList<string>? TryGetExtensions()
     {
-        // Converts random glob pattern to a simple extension name.
-        // Path.GetExtension should be sufficient here,
-        // Only exception is "*.*proj" patterns that should be filtered as well.
-        return Patterns?.Select(Path.GetExtension)
-            .Where(e => !string.IsNullOrEmpty(e) && !e.Contains('*') && e.StartsWith("."))
-            .Select(e => e!.TrimStart('.'))
-            .ToArray()!;
+        return Patterns?
+            .Select(TryGetExtension)
+            .Where(e => !string.IsNullOrEmpty(e))!
+            .ToArray<string>();
+    }
+
+    /// <summary>
+    /// Converts a glob pattern to a simple extension name.
+    /// Tries to return as many extensions as possible that don't contain a pattern (e.g. "*.*abc*.def.ghi" returns "def.ghi").
+    /// </summary>
+    /// <param name="pattern">The pattern.</param>
+    /// <returns>An extension, if available, without a starting dot, or null if no valid extension was found.</returns>
+    internal static string? TryGetExtension(string? pattern)
+    {
+        if (string.IsNullOrEmpty(pattern))
+            return null;
+
+        var previousDotIndex = -1;
+        var dotIndex = pattern.LastIndexOf('.', pattern.Length - 1);
+
+        while (dotIndex >= 0)
+        {
+            var extension = pattern.AsSpan(dotIndex + 1);
+
+            if (extension.IsEmpty || extension.Contains('*'))
+                break;
+
+            previousDotIndex = dotIndex;
+            if (previousDotIndex == 0)
+                break;
+
+            dotIndex = pattern.LastIndexOf('.', previousDotIndex - 1);
+        }
+
+        return previousDotIndex >= 0 ? pattern.Substring(previousDotIndex + 1) : null;
     }
 
     /// <inheritdoc />
