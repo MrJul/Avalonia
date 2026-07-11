@@ -1229,6 +1229,21 @@ namespace Avalonia.Controls
 
             // Update current viewport
             _viewport = e.EffectiveViewport.Intersect(new(Bounds.Size));
+
+            // A render transform on an ancestor can push this panel outside its clip, collapsing the effective viewport
+            // to empty even though the panel still occupies real layout space: this leaves only the anchor elements
+            // realized until the transform is cleared. Anchor realization to the scroll container's viewport in this case.
+            if (_viewport == default && IsEffectivelyVisible &&
+                _scrollAnchorProvider is IScrollable { Viewport: { Width: > 0, Height: > 0 } } scrollable)
+            {
+                _viewport = new Rect(
+                        scrollable.Offset.X,
+                        scrollable.Offset.Y,
+                        scrollable.Viewport.Width,
+                        scrollable.Viewport.Height)
+                    .Intersect(new Rect(Bounds.Size));
+            }
+
             _isWaitingForViewportUpdate = false;
 
             // Calculate buffer sizes based on viewport dimensions

@@ -51,6 +51,44 @@ namespace Avalonia.Controls.UnitTests
             AssertRealizedItems(target, itemsControl, 0, expectedCount);
         }
 
+        [Fact]
+        public void Realizes_Full_Viewport_When_Ancestor_Has_Offscreen_RenderTransform()
+        {
+            using var app = App();
+
+            var (target, _, itemsControl) = CreateUnrootedTarget<ItemsControl>();
+
+            // A full-height translation moves the control completely off-screen (client size is 100).
+            itemsControl.RenderTransform = new TranslateTransform { Y = 100 };
+
+            var root = CreateRoot(itemsControl);
+            root.LayoutManager.ExecuteInitialLayoutPass();
+
+            AssertRealizedItems(target, itemsControl, 0, 10);
+        }
+
+        [Fact]
+        public void Honors_Scroll_Offset_When_Ancestor_Has_Offscreen_RenderTransform()
+        {
+            using var app = App();
+
+            var (target, scroll, itemsControl) = CreateUnrootedTarget<ItemsControl>();
+            var root = CreateRoot(itemsControl);
+            root.LayoutManager.ExecuteInitialLayoutPass();
+
+            scroll.Offset = new Vector(0, 200);
+            Layout(target);
+            AssertRealizedItems(target, itemsControl, 20, 10);
+
+            // Now push off-screen with a render transform and force a viewport recompute.
+            // The realized viewport must still track the scroll offset instead of collapsing to the start.
+            itemsControl.RenderTransform = new TranslateTransform { Y = 100 };
+            target.InvalidateMeasure();
+            Layout(target);
+
+            AssertRealizedItems(target, itemsControl, 20, 10);
+        }
+
         [Theory]
         [InlineData(0d, 10)]
         [InlineData(0.5d, 20)]  // Buffer factor of 0.5. Since at start there is no room, the 10 additional items are just appended
