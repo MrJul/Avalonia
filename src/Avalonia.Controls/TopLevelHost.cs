@@ -45,6 +45,16 @@ internal partial class TopLevelHost : Control
         }
     }
 
+    /// <summary>
+    /// The host is the visual root handed to the layout pipeline: overlay semantics, with the
+    /// decoration inset acting as padding when set. Non-opted-in decoration layers are skipped
+    /// by the pipeline, so the inset algorithm only ever applies to the top level child.
+    /// </summary>
+    protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
+        => _decorationInset == default ?
+            Layout.Pipeline.LayoutAlgorithm.Overlay :
+            new DecoratorLayoutAlgorithm(_decorationInset);
+
     protected override Size MeasureOverride(Size availableSize)
     {
         var inset = _decorationInset;

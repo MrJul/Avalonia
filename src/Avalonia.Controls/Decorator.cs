@@ -51,6 +51,19 @@ namespace Avalonia.Controls
         }
 
         /// <inheritdoc/>
+        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
+            => new DecoratorLayoutAlgorithm(GetLayoutPadding(UseLayoutRounding, LayoutHelper.GetLayoutScale(this)));
+
+        /// <summary>
+        /// Gets the total thickness placed around the <see cref="Child"/> during layout,
+        /// captured by the layout pipeline algorithm. The classic engine rounds each thickness
+        /// on every pass (see <see cref="LayoutHelper.MeasureChild(Layoutable, Size, Thickness)"/>);
+        /// the pipeline captures the result once since the scale is constant during a frame.
+        /// </summary>
+        private protected virtual Thickness GetLayoutPadding(bool useLayoutRounding, double scale)
+            => useLayoutRounding ? LayoutHelper.RoundLayoutThickness(Padding, scale) : Padding;
+
+        /// <inheritdoc/>
         protected override Size MeasureOverride(Size availableSize)
         {
             return LayoutHelper.MeasureChild(Child, availableSize, Padding);

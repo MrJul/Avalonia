@@ -29,6 +29,12 @@ namespace Avalonia.Controls
             AffectsArrange<ReversibleStackPanel>(ReverseOrderProperty);
         }
 
+        /// <summary>
+        /// This panel customizes the classic arrange below, which the algorithm inherited from
+        /// <see cref="StackPanel"/> doesn't replicate: opt out of the layout pipeline.
+        /// </summary>
+        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm() => null;
+
         /// <inheritdoc/>
         protected override Size ArrangeOverride(Size finalSize)
         {

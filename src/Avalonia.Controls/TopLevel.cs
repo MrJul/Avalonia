@@ -741,6 +741,14 @@ namespace Avalonia.Controls
                 ToCompositionTransparencyLevel(transparencyLevel);
         }
 
+        /// <summary>
+        /// Top levels lay out their template children like the default overlay panel, which is
+        /// what allows them to act as the root of the experimental layout pipeline when
+        /// <see cref="Layout.Pipeline.LayoutPipeline.UseForTopLevels"/> is enabled.
+        /// </summary>
+        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
+            => Layout.Pipeline.LayoutAlgorithm.Overlay;
+
         protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
         {
             base.OnApplyTemplate(e);

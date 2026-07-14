@@ -658,6 +658,31 @@ namespace Avalonia.Controls.Presenters
         }
 
         /// <inheritdoc/>
+        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
+        {
+            var padding = Padding;
+            var borderThickness = BorderThickness;
+            var useLayoutRounding = UseLayoutRounding;
+            var scale = LayoutHelper.GetLayoutScale(this);
+
+            // The classic engine rounds the padding and border thickness separately on every
+            // pass; the pipeline captures the result once since the scale is constant during
+            // a frame.
+            if (useLayoutRounding)
+            {
+                padding = LayoutHelper.RoundLayoutThickness(padding, scale);
+                borderThickness = LayoutHelper.RoundLayoutThickness(borderThickness, scale);
+            }
+
+            return new ContentPresenterLayoutAlgorithm(
+                padding + borderThickness,
+                HorizontalContentAlignment,
+                VerticalContentAlignment,
+                useLayoutRounding,
+                scale);
+        }
+
+        /// <inheritdoc/>
         protected override Size MeasureOverride(Size availableSize)
         {
             return LayoutHelper.MeasureChild(Child, availableSize, Padding, BorderThickness);

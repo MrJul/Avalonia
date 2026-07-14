@@ -189,6 +189,14 @@ namespace Avalonia.Controls
                 BoxShadow);
         }
 
+        private protected override Thickness GetLayoutPadding(bool useLayoutRounding, double scale)
+        {
+            // The classic engine rounds the padding and border thickness separately before
+            // summing them, and layout rounding is not linear: keep the same order here.
+            return base.GetLayoutPadding(useLayoutRounding, scale) +
+                (useLayoutRounding ? LayoutHelper.RoundLayoutThickness(BorderThickness, scale) : BorderThickness);
+        }
+
         /// <summary>
         /// Measures the control.
         /// </summary>

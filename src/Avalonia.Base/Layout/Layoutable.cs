@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using Avalonia.Diagnostics;
 using Avalonia.Logging;
 using Avalonia.Reactive;
@@ -358,6 +359,53 @@ namespace Avalonia.Layout
         /// </summary>
         public virtual void ApplyTemplate()
         {
+        }
+
+        /// <summary>
+        /// Gets the declarative algorithm used to lay out this control by the experimental
+        /// <see cref="Pipeline.LayoutPipeline"/>, or null if this control only supports the
+        /// classic Measure/Arrange path. Controls opt into the pipeline by overriding this
+        /// method; controls that don't are skipped by the pipeline along with their subtree.
+        /// </summary>
+        protected internal virtual Pipeline.LayoutAlgorithm? GetLayoutAlgorithm() => null;
+
+        private static readonly ConcurrentDictionary<Type, bool> s_hasDefaultLayoutMethods = new();
+
+        /// <summary>
+        /// Returns true when the runtime type of this control doesn't override any of the
+        /// classic layout methods (<see cref="MeasureCore"/>, <see cref="MeasureOverride"/>,
+        /// <see cref="ArrangeCore"/>, <see cref="ArrangeOverride"/>), i.e. its layout is
+        /// entirely the default overlay behavior. Base controls use this to decide whether
+        /// derived types can safely inherit their layout pipeline opt-in.
+        /// </summary>
+        internal bool HasDefaultLayoutMethods()
+        {
+            // Creating a delegate from a method group binds to the most derived override,
+            // avoiding a reflection lookup that wouldn't be trim-safe.
+            return s_hasDefaultLayoutMethods.GetOrAdd(
+                GetType(),
+                static (_, control) =>
+                    ((Func<Size, Size>)control.MeasureOverride).Method.DeclaringType == typeof(Layoutable) &&
+                    ((Func<Size, Size>)control.ArrangeOverride).Method.DeclaringType == typeof(Layoutable) &&
+                    ((Func<Size, Size>)control.MeasureCore).Method.DeclaringType == typeof(Layoutable) &&
+                    ((Action<Rect>)control.ArrangeCore).Method.DeclaringType == typeof(Layoutable),
+                this);
+        }
+
+        /// <summary>
+        /// Publish stage of the <see cref="Pipeline.LayoutPipeline"/>: makes the results
+        /// computed against the layout snapshot observable on this control.
+        /// </summary>
+        internal void PublishPipelineLayout(Size desiredSize, Rect? bounds)
+        {
+            DesiredSize = desiredSize;
+            IsMeasureValid = true;
+
+            if (bounds is { } b)
+            {
+                Bounds = b;
+                IsArrangeValid = true;
+            }
         }
 
         /// <summary>

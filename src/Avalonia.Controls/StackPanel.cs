@@ -223,6 +223,10 @@ namespace Avalonia.Controls
             }
         }
 
+        /// <inheritdoc/>
+        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
+            => new StackPanelLayoutAlgorithm(Orientation, Spacing);
+
         /// <summary>
         /// General StackPanel layout behavior is to grow unbounded in the "stacking" direction (Size To Content).
         /// Children in this dimension are encouraged to be as large as they like.  In the other dimension,

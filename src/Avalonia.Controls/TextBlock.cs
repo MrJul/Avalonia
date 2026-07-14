@@ -656,6 +656,14 @@ namespace Avalonia.Controls
         /// </summary>
         /// <returns>A <see cref="TextLayout"/> object.</returns>
         protected virtual TextLayout CreateTextLayout(string? text)
+            => CreateTextLayout(text, _constraint, IsMeasureValid ? TextAlignment : TextAlignment.Left);
+
+        /// <summary>
+        /// Creates a <see cref="TextLayout"/> against an explicit constraint and alignment
+        /// instead of the current measure state, so that the layout pipeline can shape text
+        /// against a snapshot constraint, potentially off the UI thread.
+        /// </summary>
+        internal TextLayout CreateTextLayout(string? text, Size constraint, TextAlignment textAlignment)
         {
             var typeface = new Typeface(FontFamily, FontStyle, FontWeight, FontStretch);
 
@@ -666,7 +674,7 @@ namespace Avalonia.Controls
                 Foreground,
                 fontFeatures: FontFeatures);
 
-            var paragraphProperties = new GenericTextParagraphProperties(FlowDirection, IsMeasureValid ? TextAlignment : TextAlignment.Left, true, false,
+            var paragraphProperties = new GenericTextParagraphProperties(FlowDirection, textAlignment, true, false,
                 defaultProperties, TextWrapping, LineHeight, 0, LetterSpacing)
             {
                 LineSpacing = LineSpacing
@@ -683,16 +691,64 @@ namespace Avalonia.Controls
                 textSource = new SimpleTextSource(text ?? "", defaultProperties);
             }
 
-            var maxSize = GetMaxSizeFromConstraint();
+            var maxWidth = double.IsNaN(constraint.Width) ? 0.0 : constraint.Width;
+            var maxHeight = double.IsNaN(constraint.Height) ? 0.0 : constraint.Height;
 
             return new TextLayout(
                 textSource,
                 paragraphProperties,
                 TextTrimming,
-                maxSize.Width,
-                maxSize.Height,
+                maxWidth,
+                maxHeight,
                 MaxLines,
                 _textRunCache ??= new TextRunCache());
+        }
+
+        /// <summary>
+        /// Gets the cache of shaped text runs, creating it if necessary. Used by the layout
+        /// pipeline to shape against the same cache as the classic engine.
+        /// </summary>
+        internal TextRunCache TextRunCache => _textRunCache ??= new TextRunCache();
+
+        /// <summary>
+        /// Publish stage of the layout pipeline: adopts the text layout shaped during the
+        /// measure stage when the final constraint matches it, otherwise stores the constraint
+        /// and lets the render layout be recreated lazily, like the classic ArrangeOverride.
+        /// </summary>
+        internal void SetPipelineTextLayout(TextLayout? measuredLayout, Size measuredConstraint, Size finalConstraint)
+        {
+            _textLayout?.Dispose();
+            _textLayout = null;
+            _constraint = finalConstraint;
+
+            if (measuredLayout is not null)
+            {
+                if (measuredConstraint == finalConstraint)
+                {
+                    _textLayout = measuredLayout;
+                }
+                else
+                {
+                    measuredLayout.Dispose();
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
+        {
+            // Only plain text on exact TextBlock instances: derived types may override
+            // CreateTextLayout, and complex (inline) content mutates the visual tree during
+            // the classic arrange, which the pipeline doesn't support.
+            if (GetType() != typeof(TextBlock) || HasComplexContent)
+                return null;
+
+            var padding = Padding;
+
+            if (UseLayoutRounding)
+                padding = LayoutHelper.RoundLayoutThickness(padding, LayoutHelper.GetLayoutScale(this));
+
+            return new TextBlockLayoutAlgorithm(this, padding);
         }
 
         /// <summary>
@@ -930,7 +986,7 @@ namespace Avalonia.Controls
             }
         }
 
-        protected readonly record struct SimpleTextSource : ITextSource
+        protected internal readonly record struct SimpleTextSource : ITextSource
         {
             private readonly string _text;
             private readonly TextRunProperties _defaultProperties;

@@ -127,6 +127,15 @@ namespace Avalonia.Controls
         }
 
         /// <summary>
+        /// A plain panel lays out its children with the default overlay semantics. Derived
+        /// panels define their own layout, which the overlay algorithm must not silently
+        /// replace, so only exact <see cref="Panel"/> instances opt into the layout pipeline;
+        /// derived panels opt in by providing their own algorithm.
+        /// </summary>
+        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
+            => GetType() == typeof(Panel) ? Layout.Pipeline.LayoutAlgorithm.Overlay : null;
+
+        /// <summary>
         /// Called when the <see cref="Children"/> collection changes.
         /// </summary>
         /// <param name="sender">The event sender.</param>

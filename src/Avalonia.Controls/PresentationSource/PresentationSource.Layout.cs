@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using Avalonia.Layout;
+using Avalonia.Layout.Pipeline;
 using Avalonia.Rendering;
 
 namespace Avalonia.Controls;
@@ -15,6 +16,9 @@ internal partial class PresentationSource : ILayoutRoot
 
     private ILayoutManager CreateLayoutManager()
     {
+        if (LayoutPipeline.UseForTopLevels)
+            return new PipelineLayoutManager(this, () => PlatformImpl?.ClientSize ?? Size.Infinity);
+
         var manager = new LayoutManager(this);
         _layoutDiagnosticBridge = new LayoutDiagnosticBridge(Renderer.Diagnostics, manager);
         _layoutDiagnosticBridge.SetupBridge();

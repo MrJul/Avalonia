@@ -302,6 +302,16 @@ namespace Avalonia.Controls.Primitives
             control.SetValue(IsTemplateFocusTargetProperty, value);
         }
 
+        /// <summary>
+        /// A templated control that doesn't customize the classic layout methods lays out its
+        /// template root with the default overlay semantics — padding and border thickness are
+        /// consumed by the template, not by the control itself. Such controls (Button, CheckBox
+        /// and the like) inherit the layout pipeline opt-in as a family; types overriding
+        /// measure/arrange stay out until they provide their own algorithm.
+        /// </summary>
+        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
+            => HasDefaultLayoutMethods() ? Layout.Pipeline.LayoutAlgorithm.Overlay : null;
+
         /// <inheritdoc/>
         public sealed override void ApplyTemplate()
         {

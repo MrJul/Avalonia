@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Avalonia.Layout;
 using Avalonia.LogicalTree;
 
 namespace Avalonia.Controls.Primitives
@@ -166,6 +167,38 @@ namespace Avalonia.Controls.Primitives
             base.OnDetachedFromLogicalTree(e);
             foreach (var l in _layers)
                 ((ILogical)l).NotifyDetachedFromLogicalTree(e);
+        }
+
+        /// <inheritdoc />
+        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
+        {
+            // Locate the decorated child among the children the snapshot will include, so the
+            // algorithm can tell it apart from the layers whatever their relative order.
+            var child = Child;
+            var childIndex = -1;
+
+            if (child is not null)
+            {
+                var visualChildren = VisualChildren;
+                var snapshotIndex = 0;
+
+                for (var i = 0; i < visualChildren.Count; i++)
+                {
+                    if (Layout.Pipeline.LayoutTreeSnapshot.TryGetSnapshotChild(visualChildren[i], out var layoutable, out _))
+                    {
+                        if (ReferenceEquals(layoutable, child))
+                        {
+                            childIndex = snapshotIndex;
+                            break;
+                        }
+
+                        snapshotIndex++;
+                    }
+                }
+            }
+
+            var padding = GetLayoutPadding(UseLayoutRounding, LayoutHelper.GetLayoutScale(this));
+            return new VisualLayerManagerLayoutAlgorithm(padding, childIndex);
         }
 
         /// <inheritdoc />
