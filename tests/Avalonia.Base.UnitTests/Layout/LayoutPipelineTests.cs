@@ -138,6 +138,73 @@ namespace Avalonia.Base.UnitTests.Layout
         }
 
         [Fact]
+        public void Sequential_Containers_Lay_Out_In_Parallel_Deterministically()
+        {
+            var (parallelRoot, parallelNodes) = CreateSequentialTree();
+            var (sequentialRoot, sequentialNodes) = CreateSequentialTree();
+
+            new LayoutPipeline { ParallelismThreshold = 1 }
+                .ExecuteFrame(parallelRoot, new Size(500, 500), new Rect(0, 0, 500, 500));
+            new LayoutPipeline { ParallelismThreshold = int.MaxValue }
+                .ExecuteFrame(sequentialRoot, new Size(500, 500), new Rect(0, 0, 500, 500));
+
+            for (var i = 0; i < parallelNodes.Count; i++)
+            {
+                Assert.Equal(sequentialNodes[i].DesiredSize, parallelNodes[i].DesiredSize);
+                Assert.Equal(sequentialNodes[i].Bounds, parallelNodes[i].Bounds);
+            }
+
+            static (PipelineControl Root, List<PipelineControl> Nodes) CreateSequentialTree()
+            {
+                var nodes = new List<PipelineControl>();
+                var root = new PipelineControl(new VerticalStackAlgorithm());
+                nodes.Add(root);
+
+                for (var i = 0; i < 15; i++)
+                {
+                    var group = new PipelineControl(new VerticalStackAlgorithm());
+                    nodes.Add(group);
+                    root.AddChild(group);
+
+                    for (var j = 0; j < 8; j++)
+                    {
+                        var leaf = new PipelineControl(new FixedContentAlgorithm(new Size(5 + j, 3 + i)));
+                        nodes.Add(leaf);
+                        group.AddChild(leaf);
+                    }
+                }
+
+                return (root, nodes);
+            }
+        }
+
+        [Fact]
+        public void Exceptions_From_Worker_Items_Propagate_To_The_Caller()
+        {
+            var root = new PipelineControl();
+
+            for (var i = 0; i < 8; i++)
+            {
+                var group = new PipelineControl();
+                group.AddChild(new PipelineControl(new ThrowingAlgorithm()));
+                root.AddChild(group);
+            }
+
+            var pipeline = new LayoutPipeline { ParallelismThreshold = 1 };
+
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => pipeline.ExecuteFrame(root, new Size(100, 100)));
+
+            Assert.Equal("boom", exception.Message);
+        }
+
+        private sealed class ThrowingAlgorithm : LayoutAlgorithm
+        {
+            public override Size MeasureContent(Size availableSize)
+                => throw new InvalidOperationException("boom");
+        }
+
+        [Fact]
         public void Parallel_Execution_Matches_Sequential_Execution()
         {
             var (parallelRoot, parallelNodes) = CreateWideTree();

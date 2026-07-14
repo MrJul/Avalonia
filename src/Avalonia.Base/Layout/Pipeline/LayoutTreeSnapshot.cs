@@ -1,6 +1,9 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 
 namespace Avalonia.Layout.Pipeline;
 
@@ -39,158 +42,94 @@ internal readonly struct LayoutNodeInputs
 /// children of any node form a contiguous range both in the node arrays (their indices are
 /// consecutive) and in <see cref="ChildrenFlat"/>.
 /// </remarks>
-internal sealed class LayoutTreeSnapshot
+internal sealed class LayoutTreeSnapshot(
+    ArraySegment<Layoutable> controls,
+    ArraySegment<LayoutAlgorithm> algorithms,
+    ArraySegment<LayoutNodeInputs> inputs,
+    ArraySegment<bool> isVisible,
+    ArraySegment<int> parent,
+    ArraySegment<int> indexInParent,
+    ArraySegment<int> childrenStart,
+    ArraySegment<int> childrenCount,
+    ArraySegment<int> childrenFlat,
+    ArraySegment<int> subtreeSize,
+    double scale)
+    : IDisposable
 {
     public const int RootIndex = 0;
 
     // Tree structure and inputs: immutable once built.
-    public readonly Layoutable[] Controls;
-    public readonly LayoutAlgorithm[] Algorithms;
-    public readonly LayoutNodeInputs[] Inputs;
-    public readonly bool[] IsVisible;
-    public readonly int[] ChildrenStart;
-    public readonly int[] ChildrenCount;
-    public readonly int[] ChildrenFlat;
-    public readonly int[] SubtreeSize;
-    public readonly double Scale;
+    public ArraySegment<Layoutable> Controls = controls;
+    public ArraySegment<LayoutAlgorithm> Algorithms = algorithms;
+    public ArraySegment<LayoutNodeInputs> Inputs = inputs;
+    public ArraySegment<bool> IsVisible = isVisible;
+    public ArraySegment<int> Parent = parent; // -1 for the root
+    public ArraySegment<int> IndexInParent = indexInParent; // index into ChildrenFlat, -1 for the root
+    public ArraySegment<int> ChildrenStart = childrenStart;
+    public ArraySegment<int> ChildrenCount = childrenCount;
+    public ArraySegment<int> ChildrenFlat = childrenFlat;
+    public ArraySegment<int> SubtreeSize = subtreeSize;
+    public readonly double Scale = scale;
 
     // Outputs: each measure/arrange task writes to indices no other task reads or writes.
-    public readonly Size[] DesiredSize;
-    public readonly Size[] ChildMeasuredSizes; // aligned with ChildrenFlat
-    public readonly Rect[] ChildSlots; // aligned with ChildrenFlat
-    public readonly Rect[] Bounds;
-    public readonly bool[] Arranged;
+    public ArraySegment<Size> DesiredSize = Rent<Size>(controls.Count);
+    public ArraySegment<Size> ChildMeasuredSizes = Rent<Size>(childrenFlat.Count); // aligned with ChildrenFlat
+    public ArraySegment<Rect> ChildSlots = Rent<Rect>(childrenFlat.Count); // aligned with ChildrenFlat
+    public ArraySegment<Rect> Bounds = Rent<Rect>(controls.Count);
+    public ArraySegment<bool> Arranged = Rent<bool>(controls.Count);
 
-    public int Count => Controls.Length;
+    // Wavefront scheduling state, used when a stage runs on the LayoutWorkerPool: the size
+    // made available to a node, its constrained size, the slot rect assigned by its parent,
+    // and the completion tracking of its children (a countdown for independent containers,
+    // a cursor for sequential ones).
+    public ArraySegment<Size> NodeAvailableSize = Rent<Size>(controls.Count);
+    public ArraySegment<Size> NodeConstrainedSize = Rent<Size>(controls.Count);
+    public ArraySegment<Rect> NodeSlot = Rent<Rect>(controls.Count);
+    public ArraySegment<int> PendingChildren = Rent<int>(controls.Count);
+    public ArraySegment<int> SequentialCursor = Rent<int>(controls.Count);
 
-    private LayoutTreeSnapshot(
-        Layoutable[] controls,
-        LayoutAlgorithm[] algorithms,
-        LayoutNodeInputs[] inputs,
-        bool[] isVisible,
-        int[] childrenStart,
-        int[] childrenCount,
-        int[] childrenFlat,
-        int[] subtreeSize,
-        double scale)
+    public int Count
+        => Controls.Count;
+
+    private static ArraySegment<T> Rent<T>(int count)
     {
-        Controls = controls;
-        Algorithms = algorithms;
-        Inputs = inputs;
-        IsVisible = isVisible;
-        ChildrenStart = childrenStart;
-        ChildrenCount = childrenCount;
-        ChildrenFlat = childrenFlat;
-        SubtreeSize = subtreeSize;
-        Scale = scale;
-
-        DesiredSize = new Size[controls.Length];
-        ChildMeasuredSizes = new Size[childrenFlat.Length];
-        ChildSlots = new Rect[childrenFlat.Length];
-        Bounds = new Rect[controls.Length];
-        Arranged = new bool[controls.Length];
+        var array = ArrayPool<T>.Shared.Rent(count);
+        Array.Clear(array, 0, count);
+        return new ArraySegment<T>(array, 0, count);
     }
 
-    /// <summary>
-    /// Builds a snapshot of the subtree rooted at <paramref name="root"/>, including only the
-    /// controls providing a <see cref="LayoutAlgorithm"/>. Children that don't opt in are
-    /// excluded along with their whole subtree: they won't be measured, arranged or rendered.
-    /// Invisible children are excluded too, matching the classic engine where they always
-    /// measure to an empty size and containers skip them (e.g. for spacing) — this way
-    /// algorithms only ever see visible children. Returns null if the root itself doesn't opt in.
-    /// </summary>
-    public static LayoutTreeSnapshot? TryBuild(Layoutable root, double scale)
+    private static void Return<T>(ref ArraySegment<T> arraySegment)
     {
-        if (root.GetLayoutAlgorithm() is not { } rootAlgorithm)
-            return null;
+        if (arraySegment.Array is null)
+            return;
 
-        var controls = new List<Layoutable>();
-        var algorithms = new List<LayoutAlgorithm>();
-        var inputs = new List<LayoutNodeInputs>();
-        var isVisible = new List<bool>();
-        var childrenStart = new List<int>();
-        var childrenCount = new List<int>();
-        var childrenFlat = new List<int>();
-
-        AddNode(root, rootAlgorithm);
-
-        // Breadth-first: each dequeued node appends its opted-in children contiguously.
-        for (var node = 0; node < controls.Count; node++)
-        {
-            childrenStart.Add(childrenFlat.Count);
-
-            var visualChildren = controls[node].VisualChildren;
-            var count = 0;
-
-            for (var i = 0; i < visualChildren.Count; i++)
-            {
-                if (TryGetSnapshotChild(visualChildren[i], out var layoutable, out var algorithm))
-                {
-                    childrenFlat.Add(AddNode(layoutable, algorithm));
-                    count++;
-                }
-            }
-
-            childrenCount.Add(count);
-        }
-
-        // Children always have larger indices than their parent, so a reverse scan accumulates
-        // subtree sizes (used by the pipeline to decide whether forking is worth it).
-        var subtreeSize = new int[controls.Count];
-
-        for (var node = controls.Count - 1; node >= 0; node--)
-        {
-            var size = 1;
-            var start = childrenStart[node];
-            var end = start + childrenCount[node];
-
-            for (var i = start; i < end; i++)
-                size += subtreeSize[childrenFlat[i]];
-
-            subtreeSize[node] = size;
-        }
-
-        return new LayoutTreeSnapshot(
-            controls.ToArray(),
-            algorithms.ToArray(),
-            inputs.ToArray(),
-            isVisible.ToArray(),
-            childrenStart.ToArray(),
-            childrenCount.ToArray(),
-            childrenFlat.ToArray(),
-            subtreeSize,
-            scale);
-
-        int AddNode(Layoutable control, LayoutAlgorithm algorithm)
-        {
-            var index = controls.Count;
-            controls.Add(control);
-            algorithms.Add(algorithm);
-            inputs.Add(new LayoutNodeInputs(control));
-            isVisible.Add(control.IsVisible);
-            return index;
-        }
+        ArrayPool<T>.Shared.Return(arraySegment.Array, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+        arraySegment = default;
     }
 
-    /// <summary>
-    /// The single definition of which visual children participate in a snapshot: visible
-    /// layoutables providing a layout algorithm. Containers whose algorithm depends on child
-    /// indices (e.g. VisualLayerManager) use this to map controls to snapshot indices.
-    /// </summary>
-    public static bool TryGetSnapshotChild(
-        Visual visual,
-        [NotNullWhen(true)] out Layoutable? layoutable,
-        [NotNullWhen(true)] out LayoutAlgorithm? algorithm)
+    public void Dispose()
     {
-        if (visual is Layoutable { IsVisible: true } l && l.GetLayoutAlgorithm() is { } a)
-        {
-            layoutable = l;
-            algorithm = a;
-            return true;
-        }
+        Return(ref Controls);
+        Return(ref Algorithms);
+        Return(ref Inputs);
+        Return(ref IsVisible);
+        Return(ref Parent);
+        Return(ref IndexInParent);
+        Return(ref ChildrenStart);
+        Return(ref ChildrenCount);
+        Return(ref ChildrenFlat);
+        Return(ref SubtreeSize);
 
-        layoutable = null;
-        algorithm = null;
-        return false;
+        Return(ref DesiredSize);
+        Return(ref ChildMeasuredSizes);
+        Return(ref ChildSlots);
+        Return(ref Bounds);
+        Return(ref Arranged);
+
+        Return(ref NodeAvailableSize);
+        Return(ref NodeConstrainedSize);
+        Return(ref NodeSlot);
+        Return(ref PendingChildren);
+        Return(ref SequentialCursor);
     }
 }

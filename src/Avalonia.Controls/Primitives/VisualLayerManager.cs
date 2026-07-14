@@ -184,7 +184,8 @@ namespace Avalonia.Controls.Primitives
 
                 for (var i = 0; i < visualChildren.Count; i++)
                 {
-                    if (Layout.Pipeline.LayoutTreeSnapshot.TryGetSnapshotChild(visualChildren[i], out var layoutable, out _))
+                    if (visualChildren[i] is Layoutable { IsVisible: true } layoutable &&
+                        layoutable.GetLayoutAlgorithm() is { } algorithm)
                     {
                         if (ReferenceEquals(layoutable, child))
                         {
