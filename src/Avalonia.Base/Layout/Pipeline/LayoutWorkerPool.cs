@@ -35,7 +35,7 @@ internal sealed class LayoutWorkerPool
 
     private readonly object _executionLock = new();
     private readonly ConcurrentQueue<int> _queue = new();
-    private readonly SemaphoreSlim _workAvailable = new(0);
+    private readonly AutoResetEvent _workAvailable = new(false);
     private ILayoutWorkProcessor? _processor;
     private int _activeItems;
     private Exception? _exception;
@@ -89,7 +89,7 @@ internal sealed class LayoutWorkerPool
     {
         Interlocked.Increment(ref _activeItems);
         _queue.Enqueue(item);
-        _workAvailable.Release();
+        _workAvailable.Set();
     }
 
     private void RunItem(int item)
@@ -130,7 +130,7 @@ internal sealed class LayoutWorkerPool
     {
         while (true)
         {
-            _workAvailable.Wait();
+            _workAvailable.WaitOne();
 
             if (_queue.TryDequeue(out var item))
                 RunItem(item);
