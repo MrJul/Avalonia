@@ -15,9 +15,10 @@ internal sealed class LayoutTreeSnapshotBuilder
     private ArrayBuilder<Layoutable> _controls = new();
     private ArrayBuilder<LayoutAlgorithm> _algorithms = new();
     private ArrayBuilder<LayoutNodeRecord> _nodes = new();
-    private ArrayBuilder<int> _childrenStart = new();
+    private ArrayBuilder<bool> _isVisible = new();
+    private ArrayBuilder<int> _firstChild = new();
     private ArrayBuilder<int> _childrenCount = new();
-    private ArrayBuilder<int> _childrenFlat = new();
+    private ArrayBuilder<Size> _desiredSize = new();
 
     /// <summary>
     /// Builds a snapshot of the subtree rooted at <paramref name="root"/> (assumed already
@@ -33,12 +34,22 @@ internal sealed class LayoutTreeSnapshotBuilder
     /// </summary>
     public LayoutTreeSnapshot Build(Layoutable root, LayoutAlgorithm rootAlgorithm, double scale)
     {
-        AddNode(root, rootAlgorithm, -1, -1, true);
+        AddNode(root, rootAlgorithm, -1, root.IsVisible);
 
-        // Breadth-first: each dequeued node appends its opted-in children contiguously.
+        // Breadth-first: each dequeued node appends its opted-in children contiguously, so a
+        // node's children are exactly the node range [FirstChild, FirstChild + count) — no
+        // child index mapping is needed as long as the tree is built this way.
         for (var node = 0; node < _controls.Count; node++)
         {
-            _childrenStart.Add(_childrenFlat.Count);
+            _firstChild.Add(_controls.Count);
+
+            // An invisible node measures to an empty size without visiting its children, like
+            // the classic MeasureCore: its subtree is pruned from the snapshot.
+            if (!_isVisible[node])
+            {
+                _childrenCount.Add(0);
+                continue;
+            }
 
             // Enumerate the exact collection the classic implementation lays out (e.g.
             // Panel.Children, Decorator.Child), which defaults to the visual children.
@@ -54,13 +65,17 @@ internal sealed class LayoutTreeSnapshotBuilder
                 // Styling may itself change the visibility, apply before checking for IsVisible
                 child.ApplyStyling();
 
+                // Invisible children are included so that, like in the classic engine, they
+                // measure to an empty size and record the pass — but they aren't templated
+                // and their subtree isn't visited.
                 var isVisible = child.IsVisible;
 
                 if (isVisible)
                     child.ApplyTemplate();
 
-                var flatIndex = _childrenFlat.Count;
-                _childrenFlat.Add(AddNode(child, algorithm, node, flatIndex, isVisible));
+                var index = AddNode(child, algorithm, node, isVisible);
+                Debug.Assert(index == _firstChild[node] + count,
+                    "Breadth-first construction must assign contiguous indices to a node's children.");
                 count++;
             }
 
@@ -78,20 +93,23 @@ internal sealed class LayoutTreeSnapshotBuilder
         for (var node = _controls.Count - 1; node >= 0; node--)
         {
             var size = 1;
-            var start = _childrenStart[node];
-            var end = start + _childrenCount[node];
+            var firstChild = _firstChild[node];
+            var end = firstChild + _childrenCount[node];
             ref var record = ref _nodes.GetRef(node);
             var isSubtreeMeasureValid = record.IsMeasureValid;
             var isSubtreeArrangeValid = record.IsArrangeValid;
 
-            for (var i = start; i < end; i++)
+            for (var child = firstChild; child < end; child++)
             {
-                var child = _childrenFlat[i];
                 size += subtreeSize[child];
 
                 ref readonly var childRecord = ref _nodes.GetRef(child);
                 isSubtreeMeasureValid &= childRecord.IsMeasureValid;
-                isSubtreeArrangeValid &= childRecord.IsArrangeValid;
+
+                // An invisible child never records an arrange (classic containers skip
+                // arranging it), so it must not prevent its ancestors from skipping.
+                if (_isVisible[child])
+                    isSubtreeArrangeValid &= childRecord.IsArrangeValid;
             }
 
             subtreeSize[node] = size;
@@ -109,24 +127,28 @@ internal sealed class LayoutTreeSnapshotBuilder
             }
         }
 
-        var snapshot = new LayoutTreeSnapshot(
+        return new LayoutTreeSnapshot(
             _controls.GetAndClear(),
             _algorithms.GetAndClear(),
             _nodes.GetAndClear(),
-            _childrenStart.GetAndClear(),
+            _isVisible.GetAndClear(),
+            _firstChild.GetAndClear(),
             _childrenCount.GetAndClear(),
-            _childrenFlat.GetAndClear(),
             subtreeSize,
+            _desiredSize.GetAndClear(),
             scale);
 
-        snapshot.PrefillPreviousDesiredSizes();
-        return snapshot;
-
-        int AddNode(Layoutable control, LayoutAlgorithm algorithm, int parentNode, int flatIndex, bool isVisible)
+        int AddNode(Layoutable control, LayoutAlgorithm algorithm, int parentNode, bool isVisible)
         {
             var index = _controls.Count;
             _controls.Add(control);
             _algorithms.Add(algorithm);
+            _isVisible.Add(isVisible);
+
+            // Prefill the snapshot's desired sizes with the previously published value, so that
+            // subtrees skipped by the classic validity guard expose correct sizes to parent
+            // combines, arrange and publish.
+            _desiredSize.Add(control.DesiredSize);
 
             _nodes.Add(new LayoutNodeRecord
             {
@@ -134,9 +156,7 @@ internal sealed class LayoutTreeSnapshotBuilder
                 IsArrangeValid = control.IsArrangeValid,
                 PreviousMeasureSize = control.PreviousMeasure.GetValueOrDefault(s_invalidSize),
                 PreviousArrangeRect = control.PreviousArrange.GetValueOrDefault(s_invalidRect),
-                Parent = parentNode,
-                IndexInParent = flatIndex,
-                IsVisible = isVisible
+                Parent = parentNode
             });
 
             return index;

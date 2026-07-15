@@ -33,36 +33,49 @@ internal sealed class StackPanelLayoutAlgorithm : LayoutAlgorithm
             availableSize.WithWidth(double.PositiveInfinity) :
             availableSize.WithHeight(double.PositiveInfinity);
 
-    public override Size CombineChildSizes(Size availableSize, ReadOnlySpan<Size> childSizes)
+    public override Size CombineChildSizes(Size availableSize, ReadOnlySpan<Size> childSizes, ReadOnlySpan<bool> childrenVisibility)
     {
         double stacked = 0.0, cross = 0.0;
+        var hasVisibleChild = false;
 
-        foreach (ref readonly var childSize in childSizes)
+        for (var i = 0; i < childSizes.Length; i++)
         {
+            // Like the classic MeasureOverride, an invisible child contributes its (empty)
+            // desired size but no spacing.
+            ref readonly var childSize = ref childSizes[i];
+            var isVisible = childrenVisibility[i];
+            var spacing = isVisible ? _spacing : 0.0;
+            hasVisibleChild |= isVisible;
+
             if (_horizontal)
             {
-                stacked += childSize.Width + _spacing;
+                stacked += spacing + childSize.Width;
                 cross = Math.Max(cross, childSize.Height);
             }
             else
             {
-                stacked += childSize.Height + _spacing;
+                stacked += spacing + childSize.Height;
                 cross = Math.Max(cross, childSize.Width);
             }
         }
 
-        if (childSizes.Length > 0)
+        if (hasVisibleChild)
             stacked -= _spacing;
 
         return _horizontal ? new Size(stacked, cross) : new Size(cross, stacked);
     }
 
-    public override void ArrangeChildren(Size finalSize, Size desiredSize, ReadOnlySpan<Size> childSizes, Span<Rect> childSlots)
+    public override void ArrangeChildren(Size finalSize, Size desiredSize, ReadOnlySpan<Size> childSizes, ReadOnlySpan<bool> childrenVisibility, Span<Rect> childSlots)
     {
         var offset = 0.0;
 
         for (var i = 0; i < childSlots.Length; i++)
         {
+            // Invisible children are skipped like in the classic ArrangeOverride: no slot, no
+            // spacing. Their slot value is never used by the arrange stage.
+            if (!childrenVisibility[i])
+                continue;
+
             ref readonly var childSize = ref childSizes[i];
 
             if (_horizontal)

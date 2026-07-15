@@ -109,7 +109,7 @@ public sealed class LayoutPipeline
     {
         const int root = LayoutTreeSnapshot.RootIndex;
 
-        if (!tree.Nodes.GetRef(root).IsVisible || ShouldProcessInline(tree, root))
+        if (!tree.IsVisible[root] || ShouldProcessInline(tree, root))
         {
             MeasureNode(tree, root, availableSize);
         }
@@ -143,10 +143,9 @@ public sealed class LayoutPipeline
 
         // Classic engine guard (Layoutable.Measure): a subtree whose measures are all valid
         // and which receives the same constraint as the previous pass isn't re-measured — the
-        // prefilled desired size is reused and the whole subtree is pruned. The captured value
-        // is NaN (never equal) when anything in the subtree is invalid.
-        ref var record = ref tree.Nodes.GetRef(node);
-        if (!record.IsMeasureValid || record.PreviousMeasureSize != availableSize)
+        // prefilled desired size is reused and the whole subtree is pruned.
+        ref readonly var record = ref tree.Nodes.GetRef(node);
+        if (record.IsMeasureValid && record.PreviousMeasureSize == availableSize)
         {
             CompleteMeasuredNode(tree, node);
             return;
@@ -165,13 +164,13 @@ public sealed class LayoutPipeline
         tree.NodeConstrainedSize[node] = constrainedSize;
 
         var algorithm = tree.Algorithms[node];
-        var start = tree.ChildrenStart[node];
+        var firstChild = tree.FirstChild[node];
         var count = tree.ChildrenCount[node];
 
         if (algorithm.MeasureDependency == LayoutChildrenDependency.Sequential)
         {
             tree.SequentialCursor[node] = 0;
-            ScheduleMeasure(tree, tree.ChildrenFlat[start],
+            ScheduleMeasure(tree, firstChild,
                 algorithm.GetChildAvailableSize(0, constrainedSize, ReadOnlySpan<Size>.Empty));
         }
         else
@@ -180,7 +179,7 @@ public sealed class LayoutPipeline
 
             for (var i = 0; i < count; i++)
             {
-                ScheduleMeasure(tree, tree.ChildrenFlat[start + i],
+                ScheduleMeasure(tree, firstChild + i,
                     algorithm.GetChildAvailableSize(i, constrainedSize, ReadOnlySpan<Size>.Empty));
             }
         }
@@ -193,24 +192,22 @@ public sealed class LayoutPipeline
     }
 
     /// <summary>
-    /// Called when a node's desired size is known: records it in the parent's child sizes,
-    /// then either schedules the next sequential sibling or, when this was the last pending
-    /// child, combines the parent and continues cascading upwards.
+    /// Called when a node's desired size is known — thanks to the breadth-first contiguity it
+    /// already sits at its index in <see cref="LayoutTreeSnapshot.DesiredSize"/>, which doubles
+    /// as the parent's child sizes span. Either schedules the next sequential sibling or, when
+    /// this was the last pending child, combines the parent and continues cascading upwards.
     /// </summary>
     private void CompleteMeasuredNode(LayoutTreeSnapshot tree, int node)
     {
         while (true)
         {
-            ref readonly var record = ref tree.Nodes.GetRef(node);
-            var parent = record.Parent;
+            var parent = tree.Nodes.GetRef(node).Parent;
 
             if (parent < 0)
                 return;
 
-            tree.ChildMeasuredSizes[record.IndexInParent] = tree.DesiredSize[node];
-
             var algorithm = tree.Algorithms[parent];
-            var start = tree.ChildrenStart[parent];
+            var firstChild = tree.FirstChild[parent];
             var count = tree.ChildrenCount[parent];
 
             if (algorithm.MeasureDependency == LayoutChildrenDependency.Sequential)
@@ -221,11 +218,11 @@ public sealed class LayoutPipeline
 
                 if (next < count)
                 {
-                    ScheduleMeasure(tree, tree.ChildrenFlat[start + next],
+                    ScheduleMeasure(tree, firstChild + next,
                         algorithm.GetChildAvailableSize(
                             next,
                             tree.NodeConstrainedSize[parent],
-                            tree.ChildMeasuredSizes.AsSpan(start, next)));
+                            tree.DesiredSize.AsSpan(firstChild, next)));
                     return;
                 }
             }
@@ -238,7 +235,8 @@ public sealed class LayoutPipeline
             // Last child measured: combine and finish the parent, then cascade.
             var measured = algorithm.CombineChildSizes(
                 tree.NodeConstrainedSize[parent],
-                tree.ChildMeasuredSizes.AsSpan(start, count));
+                tree.DesiredSize.AsSpan(firstChild, count),
+                tree.IsVisible.AsSpan(firstChild, count));
 
             FinalizeDesiredSize(tree, parent, tree.NodeAvailableSize[parent], measured);
 
@@ -254,7 +252,7 @@ public sealed class LayoutPipeline
     {
         ref readonly var record = ref tree.Nodes.GetRef(node);
 
-        if (!record.IsVisible)
+        if (!tree.IsVisible[node])
         {
             // Like the classic MeasureCore, an invisible control measures to an empty size but
             // still records the pass, so it can be skipped next frame.
@@ -265,7 +263,7 @@ public sealed class LayoutPipeline
         }
 
         // Classic engine guard (Layoutable.Measure): see ProcessMeasureItem.
-        if (record.PreviousMeasureSize == availableSize)
+        if (record.IsMeasureValid && record.PreviousMeasureSize == availableSize)
             return tree.DesiredSize[node];
 
         tree.NodeAvailableSize[node] = availableSize;
@@ -281,17 +279,16 @@ public sealed class LayoutPipeline
         }
         else
         {
-            var start = tree.ChildrenStart[node];
+            var firstChild = tree.FirstChild[node];
 
             if (algorithm.MeasureDependency == LayoutChildrenDependency.Sequential)
             {
                 for (var i = 0; i < childCount; i++)
                 {
                     var childAvailableSize = algorithm.GetChildAvailableSize(
-                        i, constrainedSize, tree.ChildMeasuredSizes.AsSpan(start, i));
+                        i, constrainedSize, tree.DesiredSize.AsSpan(firstChild, i));
 
-                    tree.ChildMeasuredSizes[start + i] =
-                        MeasureNode(tree, tree.ChildrenFlat[start + i], childAvailableSize);
+                    MeasureNode(tree, firstChild + i, childAvailableSize);
                 }
             }
             else
@@ -301,13 +298,14 @@ public sealed class LayoutPipeline
                     var childAvailableSize = algorithm.GetChildAvailableSize(
                         i, constrainedSize, ReadOnlySpan<Size>.Empty);
 
-                    tree.ChildMeasuredSizes[start + i] =
-                        MeasureNode(tree, tree.ChildrenFlat[start + i], childAvailableSize);
+                    MeasureNode(tree, firstChild + i, childAvailableSize);
                 }
             }
 
             measured = algorithm.CombineChildSizes(
-                constrainedSize, tree.ChildMeasuredSizes.AsSpan(start, childCount));
+                constrainedSize,
+                tree.DesiredSize.AsSpan(firstChild, childCount),
+                tree.IsVisible.AsSpan(firstChild, childCount));
         }
 
         return FinalizeDesiredSize(tree, node, availableSize, measured);
@@ -379,7 +377,7 @@ public sealed class LayoutPipeline
     {
         const int root = LayoutTreeSnapshot.RootIndex;
 
-        if (!tree.Nodes.GetRef(root).IsVisible)
+        if (!tree.IsVisible[root])
             return;
 
         if (ShouldProcessInline(tree, root))
@@ -430,15 +428,13 @@ public sealed class LayoutPipeline
 
         ArrangeNodeCore(tree, node, slot);
 
-        var start = tree.ChildrenStart[node];
+        // The children slots were written directly into NodeSlot by ArrangeNodeCore, thanks
+        // to the breadth-first contiguity: just push the children.
+        var firstChild = tree.FirstChild[node];
         var count = tree.ChildrenCount[node];
 
         for (var i = 0; i < count; i++)
-        {
-            var child = tree.ChildrenFlat[start + i];
-            tree.NodeSlot[child] = tree.ChildSlots[start + i];
-            LayoutWorkerPool.Instance.Enqueue(child);
-        }
+            LayoutWorkerPool.Instance.Enqueue(firstChild + i);
     }
 
     /// <summary>
@@ -448,7 +444,7 @@ public sealed class LayoutPipeline
     {
         ref readonly var record = ref tree.Nodes.GetRef(node);
 
-        if (!record.IsVisible)
+        if (!tree.IsVisible[node])
             return;
 
         // Classic engine guard (Layoutable.Arrange): see ProcessArrangeItem.
@@ -457,11 +453,11 @@ public sealed class LayoutPipeline
 
         ArrangeNodeCore(tree, node, finalRect);
 
-        var start = tree.ChildrenStart[node];
+        var firstChild = tree.FirstChild[node];
         var count = tree.ChildrenCount[node];
 
         for (var i = 0; i < count; i++)
-            ArrangeNode(tree, tree.ChildrenFlat[start + i], tree.ChildSlots[start + i]);
+            ArrangeNode(tree, firstChild + i, tree.NodeSlot[firstChild + i]);
     }
 
     /// <summary>
@@ -515,13 +511,14 @@ public sealed class LayoutPipeline
 
         if (childCount > 0)
         {
-            var start = tree.ChildrenStart[node];
+            var firstChild = tree.FirstChild[node];
 
             tree.Algorithms[node].ArrangeChildren(
                 size,
                 desiredSize,
-                tree.ChildMeasuredSizes.AsSpan(start, childCount),
-                tree.ChildSlots.AsSpan(start, childCount));
+                tree.DesiredSize.AsSpan(firstChild, childCount),
+                tree.IsVisible.AsSpan(firstChild, childCount),
+                tree.NodeSlot.AsSpan(firstChild, childCount));
         }
 
         switch (horizontalAlignment)

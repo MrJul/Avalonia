@@ -27,12 +27,12 @@ internal sealed class VisualLayerManagerLayoutAlgorithm : LayoutAlgorithm
     public override Size GetChildAvailableSize(int childIndex, Size availableSize, ReadOnlySpan<Size> measuredSiblings)
         => childIndex == _childIndex ? availableSize.Deflate(_padding) : availableSize;
 
-    public override Size CombineChildSizes(Size availableSize, ReadOnlySpan<Size> childSizes)
+    public override Size CombineChildSizes(Size availableSize, ReadOnlySpan<Size> childSizes, ReadOnlySpan<bool> childrenVisibility)
         => _childIndex >= 0 && _childIndex < childSizes.Length ?
             childSizes[_childIndex].Inflate(_padding) :
             new Size().Inflate(_padding);
 
-    public override void ArrangeChildren(Size finalSize, Size desiredSize, ReadOnlySpan<Size> childSizes, Span<Rect> childSlots)
+    public override void ArrangeChildren(Size finalSize, Size desiredSize, ReadOnlySpan<Size> childSizes, ReadOnlySpan<bool> childrenVisibility, Span<Rect> childSlots)
     {
         childSlots.Fill(new Rect(finalSize));
 

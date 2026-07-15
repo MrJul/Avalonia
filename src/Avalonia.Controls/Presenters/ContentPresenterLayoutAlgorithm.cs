@@ -26,7 +26,7 @@ internal sealed class ContentPresenterLayoutAlgorithm : DecoratorLayoutAlgorithm
         _verticalContentAlignment = verticalContentAlignment;
     }
 
-    public override void ArrangeChildren(Size finalSize, Size desiredSize, ReadOnlySpan<Size> childSizes, Span<Rect> childSlots)
+    public override void ArrangeChildren(Size finalSize, Size desiredSize, ReadOnlySpan<Size> childSizes, ReadOnlySpan<bool> childrenVisibility, Span<Rect> childSlots)
     {
         var availableSize = finalSize;
         var sizeForChild = availableSize;

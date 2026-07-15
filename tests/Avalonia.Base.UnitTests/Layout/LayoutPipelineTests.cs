@@ -784,7 +784,7 @@ namespace Avalonia.Base.UnitTests.Layout
                 return new Size(availableSize.Width, Math.Max(0, availableSize.Height - usedHeight));
             }
 
-            public override Size CombineChildSizes(Size availableSize, ReadOnlySpan<Size> childSizes)
+            public override Size CombineChildSizes(Size availableSize, ReadOnlySpan<Size> childSizes, ReadOnlySpan<bool> childrenVisibility)
             {
                 double width = 0.0, height = 0.0;
 
@@ -797,7 +797,7 @@ namespace Avalonia.Base.UnitTests.Layout
                 return new Size(width, height);
             }
 
-            public override void ArrangeChildren(Size finalSize, Size desiredSize, ReadOnlySpan<Size> childSizes, Span<Rect> childSlots)
+            public override void ArrangeChildren(Size finalSize, Size desiredSize, ReadOnlySpan<Size> childSizes, ReadOnlySpan<bool> childrenVisibility, Span<Rect> childSlots)
             {
                 var y = 0.0;
 

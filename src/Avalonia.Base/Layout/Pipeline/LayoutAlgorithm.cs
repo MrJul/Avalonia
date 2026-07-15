@@ -77,7 +77,16 @@ public abstract class LayoutAlgorithm(LayoutNodeInputs inputs)
     /// <summary>
     /// Computes the container's desired content size from the measured sizes of its children.
     /// </summary>
-    public virtual Size CombineChildSizes(Size availableSize, ReadOnlySpan<Size> childSizes)
+    /// <param name="availableSize">The size available to the container.</param>
+    /// <param name="childSizes">
+    /// The desired sizes measured for the children. Invisible children always measure to an
+    /// empty size, like in the classic engine.
+    /// </param>
+    /// <param name="childrenVisibility">
+    /// The visibility of each child. Containers that treat invisible children specially in
+    /// their classic implementation (e.g. skipping them for spacing) must do the same here.
+    /// </param>
+    public virtual Size CombineChildSizes(Size availableSize, ReadOnlySpan<Size> childSizes, ReadOnlySpan<bool> childrenVisibility)
     {
         double width = 0.0, height = 0.0;
 
@@ -104,8 +113,12 @@ public abstract class LayoutAlgorithm(LayoutNodeInputs inputs)
     /// DesiredSize inside a classic ArrangeOverride returns.
     /// </param>
     /// <param name="childSizes">The desired sizes measured for the children.</param>
+    /// <param name="childrenVisibility">
+    /// The visibility of each child. The slot of an invisible child is never used — it is
+    /// skipped by the arrange stage, like classic containers skip arranging it.
+    /// </param>
     /// <param name="childSlots">The slot rects to fill, one per child.</param>
-    public virtual void ArrangeChildren(Size finalSize, Size desiredSize, ReadOnlySpan<Size> childSizes, Span<Rect> childSlots)
+    public virtual void ArrangeChildren(Size finalSize, Size desiredSize, ReadOnlySpan<Size> childSizes, ReadOnlySpan<bool> childrenVisibility, Span<Rect> childSlots)
         => childSlots.Fill(new Rect(finalSize));
 
     /// <summary>

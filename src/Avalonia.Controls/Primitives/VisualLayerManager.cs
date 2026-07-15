@@ -185,7 +185,9 @@ namespace Avalonia.Controls.Primitives
 
                 for (var i = 0; i < layoutChildrenCount; i++)
                 {
-                    if (GetLayoutChild(i) is { IsVisible: true, LayoutAlgorithm: not null } layoutable)
+                    // Invisible children are part of the snapshot too (measured to an empty
+                    // size like in the classic engine), so only the opt-in filters the index.
+                    if (GetLayoutChild(i) is { LayoutAlgorithm: not null } layoutable)
                     {
                         if (ReferenceEquals(layoutable, child))
                         {

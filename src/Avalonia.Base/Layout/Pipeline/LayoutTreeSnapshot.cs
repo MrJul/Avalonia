@@ -60,11 +60,6 @@ internal struct LayoutNodeRecord
     /// <summary>The parent node index, -1 for the root.</summary>
     public int Parent;
 
-    /// <summary>The index into <see cref="LayoutTreeSnapshot.ChildrenFlat"/>, -1 for the root.</summary>
-    public int IndexInParent;
-
-    public bool IsVisible;
-
     public bool IsMeasureValid;
 
     public bool IsArrangeValid;
@@ -80,17 +75,19 @@ internal struct LayoutNodeRecord
 /// run on multiple threads without synchronization. No live control is touched until the
 /// publish stage.
 /// Nodes are indexed in breadth-first order (the root is <see cref="RootIndex"/>), so the
-/// children of any node form a contiguous range both in the node arrays (their indices are
-/// consecutive) and in <see cref="ChildrenFlat"/>.
+/// children of any node are the contiguous node range starting at <see cref="FirstChild"/>.
+/// The builder asserts that invariant; if a future change breaks it (e.g. incremental
+/// patching of a persistent snapshot), an explicit child index mapping must come back.
 /// </remarks>
 internal sealed class LayoutTreeSnapshot(
     ArraySegment<Layoutable> controls,
     ArraySegment<LayoutAlgorithm> algorithms,
     ArraySegment<LayoutNodeRecord> nodes,
-    ArraySegment<int> childrenStart,
+    ArraySegment<bool> isVisible,
+    ArraySegment<int> firstChild,
     ArraySegment<int> childrenCount,
-    ArraySegment<int> childrenFlat,
     ArraySegment<int> subtreeSize,
+    ArraySegment<Size> desiredSize,
     double scale)
     : IDisposable
 {
@@ -100,16 +97,22 @@ internal sealed class LayoutTreeSnapshot(
     public ArraySegment<Layoutable> Controls = controls;
     public ArraySegment<LayoutAlgorithm> Algorithms = algorithms;
     public ArraySegment<LayoutNodeRecord> Nodes = nodes;
-    public ArraySegment<int> ChildrenStart = childrenStart;
+
+    // Dense so that a per-parent slice can be handed to the layout algorithms, which may need
+    // to treat invisible children specially like their classic implementations do.
+    public ArraySegment<bool> IsVisible = isVisible;
+
+    public ArraySegment<int> FirstChild = firstChild;
     public ArraySegment<int> ChildrenCount = childrenCount;
-    public ArraySegment<int> ChildrenFlat = childrenFlat;
     public ArraySegment<int> SubtreeSize = subtreeSize;
     public readonly double Scale = scale;
 
     // Outputs: each measure/arrange task writes to indices no other task reads or writes.
-    public ArraySegment<Size> DesiredSize = Rent<Size>(controls.Count);
-    public ArraySegment<Size> ChildMeasuredSizes = Rent<Size>(childrenFlat.Count); // aligned with ChildrenFlat
-    public ArraySegment<Rect> ChildSlots = Rent<Rect>(childrenFlat.Count); // aligned with ChildrenFlat
+    // DesiredSize arrives prefilled by the builder with the previously published values, so
+    // that subtrees skipped by the classic validity guard — including their unvisited
+    // descendants — expose correct sizes to parent combines, arrange and publish. Thanks to
+    // the breadth-first contiguity, it doubles as every parent's child sizes span.
+    public ArraySegment<Size> DesiredSize = desiredSize;
     public ArraySegment<Rect> Bounds = Rent<Rect>(controls.Count);
     public ArraySegment<bool> Measured = Rent<bool>(controls.Count, clear: true);
     public ArraySegment<bool> Arranged = Rent<bool>(controls.Count, clear: true);
@@ -126,24 +129,6 @@ internal sealed class LayoutTreeSnapshot(
 
     public int Count
         => Controls.Count;
-
-    /// <summary>
-    /// Prefills the outputs with the previously published desired sizes, so that subtrees
-    /// skipped by the classic validity guard — including their unvisited descendants — expose
-    /// correct values to parent combines, to the arrange stage and to publish.
-    /// </summary>
-    public void PrefillPreviousDesiredSizes()
-    {
-        for (var node = 0; node < Controls.Count; node++)
-        {
-            var desiredSize = Controls[node].DesiredSize;
-            DesiredSize[node] = desiredSize;
-
-            var flatIndex = Nodes.GetRef(node).IndexInParent;
-            if (flatIndex >= 0)
-                ChildMeasuredSizes[flatIndex] = desiredSize;
-        }
-    }
 
     private static ArraySegment<T> Rent<T>(int count, bool clear = false)
     {
@@ -169,14 +154,12 @@ internal sealed class LayoutTreeSnapshot(
         Return(ref Controls);
         Return(ref Algorithms);
         Return(ref Nodes);
-        Return(ref ChildrenStart);
+        Return(ref IsVisible);
+        Return(ref FirstChild);
         Return(ref ChildrenCount);
-        Return(ref ChildrenFlat);
         Return(ref SubtreeSize);
 
         Return(ref DesiredSize);
-        Return(ref ChildMeasuredSizes);
-        Return(ref ChildSlots);
         Return(ref Bounds);
         Return(ref Measured);
         Return(ref Arranged);

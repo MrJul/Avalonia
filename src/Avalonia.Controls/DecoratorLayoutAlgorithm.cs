@@ -20,7 +20,7 @@ internal class DecoratorLayoutAlgorithm(LayoutNodeInputs inputs, Thickness paddi
     public override Size GetChildAvailableSize(int childIndex, Size availableSize, ReadOnlySpan<Size> measuredSiblings)
         => availableSize.Deflate(Padding);
 
-    public override Size CombineChildSizes(Size availableSize, ReadOnlySpan<Size> childSizes)
+    public override Size CombineChildSizes(Size availableSize, ReadOnlySpan<Size> childSizes, ReadOnlySpan<bool> childrenVisibility)
     {
         // A decorator has a single child, but be robust to subclasses adding more visual children.
         double width = 0.0, height = 0.0;
@@ -37,6 +37,6 @@ internal class DecoratorLayoutAlgorithm(LayoutNodeInputs inputs, Thickness paddi
         return new Size(width, height).Inflate(Padding);
     }
 
-    public override void ArrangeChildren(Size finalSize, Size desiredSize, ReadOnlySpan<Size> childSizes, Span<Rect> childSlots)
+    public override void ArrangeChildren(Size finalSize, Size desiredSize, ReadOnlySpan<Size> childSizes, ReadOnlySpan<bool> childrenVisibility, Span<Rect> childSlots)
         => childSlots.Fill(new Rect(finalSize).Deflate(Padding));
 }
