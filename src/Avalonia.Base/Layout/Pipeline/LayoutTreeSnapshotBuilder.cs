@@ -7,11 +7,14 @@ namespace Avalonia.Layout.Pipeline;
 
 internal sealed class LayoutTreeSnapshotBuilder
 {
+    // Sentinels for the classic validity guard captures: NaN never compares equal, so an
+    // invalid (or never laid out) node can never be skipped.
+    private static readonly Size s_invalidSize = new(double.NaN, double.NaN);
+    private static readonly Rect s_invalidRect = new(double.NaN, double.NaN, double.NaN, double.NaN);
+
     private ArrayBuilder<Layoutable> _controls = new();
     private ArrayBuilder<LayoutAlgorithm> _algorithms = new();
-    private ArrayBuilder<bool> _isVisible = new();
-    private ArrayBuilder<int> _parent = new();
-    private ArrayBuilder<int> _indexInParent = new();
+    private ArrayBuilder<LayoutNodeRecord> _nodes = new();
     private ArrayBuilder<int> _childrenStart = new();
     private ArrayBuilder<int> _childrenCount = new();
     private ArrayBuilder<int> _childrenFlat = new();
@@ -30,7 +33,7 @@ internal sealed class LayoutTreeSnapshotBuilder
     /// </summary>
     public LayoutTreeSnapshot Build(Layoutable root, LayoutAlgorithm rootAlgorithm, double scale)
     {
-        AddNode(root, rootAlgorithm, -1, -1);
+        AddNode(root, rootAlgorithm, -1, -1, true);
 
         // Breadth-first: each dequeued node appends its opted-in children contiguously.
         for (var node = 0; node < _controls.Count; node++)
@@ -45,30 +48,30 @@ internal sealed class LayoutTreeSnapshotBuilder
 
             for (var i = 0; i < layoutChildrenCount; i++)
             {
-                if (control.GetLayoutChild(i) is not { } child)
+                if (control.GetLayoutChild(i) is not { LayoutAlgorithm: { } algorithm } child)
                     continue;
 
                 // Styling may itself change the visibility, apply before checking for IsVisible
                 child.ApplyStyling();
 
-                if (child.IsVisible)
-                {
+                var isVisible = child.IsVisible;
+
+                if (isVisible)
                     child.ApplyTemplate();
 
-                    if (child.LayoutAlgorithm is { } algorithm)
-                    {
-                        var flatIndex = _childrenFlat.Count;
-                        _childrenFlat.Add(AddNode(child, algorithm, node, flatIndex));
-                        count++;
-                    }
-                }
+                var flatIndex = _childrenFlat.Count;
+                _childrenFlat.Add(AddNode(child, algorithm, node, flatIndex, isVisible));
+                count++;
             }
 
             _childrenCount.Add(count);
         }
 
         // Children always have larger indices than their parent, so a reverse scan accumulates
-        // subtree sizes (used by the pipeline to decide whether forking is worth it).
+        // subtree sizes (used by the pipeline to decide whether forking is worth it) and
+        // propagates the validity guard sentinels upwards: a node keeps its previous
+        // measure/arrange value only when its whole subtree is valid, so the guard checked by
+        // the measure and arrange stages is a single comparison per node.
         var subtreeSizeArray = ArrayPool<int>.Shared.Rent(_controls.Count);
         var subtreeSize = new ArraySegment<int>(subtreeSizeArray, 0, _controls.Count);
 
@@ -77,33 +80,65 @@ internal sealed class LayoutTreeSnapshotBuilder
             var size = 1;
             var start = _childrenStart[node];
             var end = start + _childrenCount[node];
+            ref var record = ref _nodes.GetRef(node);
+            var isSubtreeMeasureValid = record.IsMeasureValid;
+            var isSubtreeArrangeValid = record.IsArrangeValid;
 
             for (var i = start; i < end; i++)
-                size += subtreeSize[_childrenFlat[i]];
+            {
+                var child = _childrenFlat[i];
+                size += subtreeSize[child];
+
+                ref readonly var childRecord = ref _nodes.GetRef(child);
+                isSubtreeMeasureValid &= childRecord.IsMeasureValid;
+                isSubtreeArrangeValid &= childRecord.IsArrangeValid;
+            }
 
             subtreeSize[node] = size;
+
+            if (!isSubtreeMeasureValid)
+            {
+                record.IsMeasureValid = false;
+                record.PreviousMeasureSize = s_invalidSize;
+            }
+
+            if (!isSubtreeArrangeValid)
+            {
+                record.IsArrangeValid = false;
+                record.PreviousArrangeRect = s_invalidRect;
+            }
         }
 
-        return new LayoutTreeSnapshot(
+        var snapshot = new LayoutTreeSnapshot(
             _controls.GetAndClear(),
             _algorithms.GetAndClear(),
-            _isVisible.GetAndClear(),
-            _parent.GetAndClear(),
-            _indexInParent.GetAndClear(),
+            _nodes.GetAndClear(),
             _childrenStart.GetAndClear(),
             _childrenCount.GetAndClear(),
             _childrenFlat.GetAndClear(),
             subtreeSize,
             scale);
 
-        int AddNode(Layoutable control, LayoutAlgorithm algorithm, int parentNode, int flatIndex)
+        snapshot.PrefillPreviousDesiredSizes();
+        return snapshot;
+
+        int AddNode(Layoutable control, LayoutAlgorithm algorithm, int parentNode, int flatIndex, bool isVisible)
         {
             var index = _controls.Count;
             _controls.Add(control);
             _algorithms.Add(algorithm);
-            _isVisible.Add(control.IsVisible);
-            _parent.Add(parentNode);
-            _indexInParent.Add(flatIndex);
+
+            _nodes.Add(new LayoutNodeRecord
+            {
+                IsMeasureValid = control.IsMeasureValid,
+                IsArrangeValid = control.IsArrangeValid,
+                PreviousMeasureSize = control.PreviousMeasure.GetValueOrDefault(s_invalidSize),
+                PreviousArrangeRect = control.PreviousArrange.GetValueOrDefault(s_invalidRect),
+                Parent = parentNode,
+                IndexInParent = flatIndex,
+                IsVisible = isVisible
+            });
+
             return index;
         }
     }
@@ -126,6 +161,7 @@ internal sealed class LayoutTreeSnapshotBuilder
 
         public T this[int index]
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 Debug.Assert(index < _size);
@@ -133,13 +169,22 @@ internal sealed class LayoutTreeSnapshotBuilder
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref T GetRef(int index)
+        {
+            Debug.Assert(index < _size);
+            return ref _items[index];
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Add(T item)
         {
             var size = _size;
-            if ((uint)size < (uint)_items.Length)
+            var items = _items;
+            if ((uint)size < (uint)items.Length)
             {
                 _size = size + 1;
-                _items[size] = item;
+                items[size] = item;
             }
             else
                 AddWithResize(item);

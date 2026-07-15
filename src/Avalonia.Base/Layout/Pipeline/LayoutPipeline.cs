@@ -109,13 +109,7 @@ public sealed class LayoutPipeline
     {
         const int root = LayoutTreeSnapshot.RootIndex;
 
-        if (!tree.IsVisible[root])
-        {
-            tree.DesiredSize[root] = default;
-            return;
-        }
-
-        if (ShouldProcessInline(tree, root))
+        if (!tree.Nodes.GetRef(root).IsVisible || ShouldProcessInline(tree, root))
         {
             MeasureNode(tree, root, availableSize);
         }
@@ -146,6 +140,17 @@ public sealed class LayoutPipeline
     private void ProcessMeasureItem(LayoutTreeSnapshot tree, int node)
     {
         var availableSize = tree.NodeAvailableSize[node];
+
+        // Classic engine guard (Layoutable.Measure): a subtree whose measures are all valid
+        // and which receives the same constraint as the previous pass isn't re-measured — the
+        // prefilled desired size is reused and the whole subtree is pruned. The captured value
+        // is NaN (never equal) when anything in the subtree is invalid.
+        ref var record = ref tree.Nodes.GetRef(node);
+        if (!record.IsMeasureValid || record.PreviousMeasureSize != availableSize)
+        {
+            CompleteMeasuredNode(tree, node);
+            return;
+        }
 
         if (ShouldProcessInline(tree, node))
         {
@@ -196,12 +201,13 @@ public sealed class LayoutPipeline
     {
         while (true)
         {
-            var parent = tree.Parent[node];
+            ref readonly var record = ref tree.Nodes.GetRef(node);
+            var parent = record.Parent;
 
             if (parent < 0)
                 return;
 
-            tree.ChildMeasuredSizes[tree.IndexInParent[node]] = tree.DesiredSize[node];
+            tree.ChildMeasuredSizes[record.IndexInParent] = tree.DesiredSize[node];
 
             var algorithm = tree.Algorithms[parent];
             var start = tree.ChildrenStart[parent];
@@ -246,11 +252,23 @@ public sealed class LayoutPipeline
     /// </summary>
     private Size MeasureNode(LayoutTreeSnapshot tree, int node, Size availableSize)
     {
-        if (!tree.IsVisible[node])
+        ref readonly var record = ref tree.Nodes.GetRef(node);
+
+        if (!record.IsVisible)
         {
+            // Like the classic MeasureCore, an invisible control measures to an empty size but
+            // still records the pass, so it can be skipped next frame.
             tree.DesiredSize[node] = default;
+            tree.NodeAvailableSize[node] = availableSize;
+            tree.Measured[node] = true;
             return default;
         }
+
+        // Classic engine guard (Layoutable.Measure): see ProcessMeasureItem.
+        if (record.PreviousMeasureSize == availableSize)
+            return tree.DesiredSize[node];
+
+        tree.NodeAvailableSize[node] = availableSize;
 
         var constrainedSize = ComputeConstrainedSize(tree, node, availableSize);
         var algorithm = tree.Algorithms[node];
@@ -348,6 +366,7 @@ public sealed class LayoutPipeline
 
         var desiredSize = new Size(width, height);
         tree.DesiredSize[node] = desiredSize;
+        tree.Measured[node] = true;
         return desiredSize;
     }
 
@@ -360,7 +379,7 @@ public sealed class LayoutPipeline
     {
         const int root = LayoutTreeSnapshot.RootIndex;
 
-        if (!tree.IsVisible[root])
+        if (!tree.Nodes.GetRef(root).IsVisible)
             return;
 
         if (ShouldProcessInline(tree, root))
@@ -392,6 +411,17 @@ public sealed class LayoutPipeline
     {
         var slot = tree.NodeSlot[node];
 
+        // Classic engine guard (Layoutable.Arrange): an arrange-valid subtree receiving the
+        // same rect keeps its bounds and is pruned. Nothing below was re-measured either: the
+        // node itself wasn't (a re-measured node can't be arrange-skipped), and a skipped
+        // measure prunes its whole subtree.
+        if (!tree.Measured[node])
+        {
+            ref var record = ref tree.Nodes.GetRef(node);
+            if (record.IsArrangeValid && record.PreviousArrangeRect == slot)
+                return;
+        }
+
         if (ShouldProcessInline(tree, node))
         {
             ArrangeNode(tree, node, slot);
@@ -416,7 +446,13 @@ public sealed class LayoutPipeline
     /// </summary>
     private void ArrangeNode(LayoutTreeSnapshot tree, int node, Rect finalRect)
     {
-        if (!tree.IsVisible[node])
+        ref readonly var record = ref tree.Nodes.GetRef(node);
+
+        if (!record.IsVisible)
+            return;
+
+        // Classic engine guard (Layoutable.Arrange): see ProcessArrangeItem.
+        if (!tree.Measured[node] && record.IsArrangeValid && record.PreviousArrangeRect == finalRect)
             return;
 
         ArrangeNodeCore(tree, node, finalRect);
@@ -516,6 +552,7 @@ public sealed class LayoutPipeline
             origin = LayoutHelper.RoundLayoutPoint(origin, scale);
 
         tree.Bounds[node] = new Rect(origin, size);
+        tree.NodeSlot[node] = finalRect;
         tree.Arranged[node] = true;
     }
 
@@ -528,17 +565,26 @@ public sealed class LayoutPipeline
     {
         for (var node = 0; node < tree.Count; node++)
         {
-            var control = tree.Controls[node];
+            var measured = tree.Measured[node];
+            var arranged = tree.Arranged[node];
 
-            if (tree.Arranged[node])
+            // Classic parity: nodes skipped by the validity guards (and their unvisited
+            // subtrees) already carry correct published state and aren't touched.
+            if (!measured && !arranged)
+                continue;
+
+            var control = tree.Controls[node];
+            Size? previousMeasure = measured ? tree.NodeAvailableSize[node] : null;
+
+            if (arranged)
             {
                 var bounds = tree.Bounds[node];
-                control.PublishPipelineLayout(tree.DesiredSize[node], bounds);
+                control.PublishPipelineLayout(tree.DesiredSize[node], previousMeasure, bounds, tree.NodeSlot[node]);
                 tree.Algorithms[node].OnPublish(control, bounds.Size);
             }
             else
             {
-                control.PublishPipelineLayout(tree.DesiredSize[node], null);
+                control.PublishPipelineLayout(tree.DesiredSize[node], previousMeasure, null, null);
             }
         }
     }

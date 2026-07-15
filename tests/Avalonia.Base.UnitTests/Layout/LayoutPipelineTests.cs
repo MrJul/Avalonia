@@ -179,6 +179,62 @@ namespace Avalonia.Base.UnitTests.Layout
         }
 
         [Fact]
+        public void Valid_Subtrees_Are_Skipped_Like_The_Classic_Engine()
+        {
+            var dirtyLeaf = new PipelineControl(inputs => new CountingAlgorithm(inputs, new Size(30, 10)));
+            var siblingLeaf = new PipelineControl(inputs => new CountingAlgorithm(inputs, new Size(20, 20)));
+            var otherLeaf = new PipelineControl(inputs => new CountingAlgorithm(inputs, new Size(10, 30)));
+
+            var dirtyGroup = new PipelineControl(inputs => new OverlayLayoutAlgorithm(inputs));
+            dirtyGroup.AddChild(dirtyLeaf);
+            dirtyGroup.AddChild(siblingLeaf);
+
+            var cleanGroup = new PipelineControl(inputs => new OverlayLayoutAlgorithm(inputs));
+            cleanGroup.AddChild(otherLeaf);
+
+            var root = new PipelineControl(inputs => new OverlayLayoutAlgorithm(inputs));
+            root.AddChild(dirtyGroup);
+            root.AddChild(cleanGroup);
+
+            var pipeline = new LayoutPipeline();
+
+            pipeline.ExecuteFrame(root, new Size(100, 100), new Rect(0, 0, 100, 100));
+
+            Assert.Equal((1, 1, 1), MeasureCounts());
+            Assert.Equal(new Rect(0, 0, 100, 100), dirtyLeaf.Bounds);
+
+            // An identical frame skips the whole tree, like the classic Measure/Arrange guards.
+            pipeline.ExecuteFrame(root, new Size(100, 100), new Rect(0, 0, 100, 100));
+
+            Assert.Equal((1, 1, 1), MeasureCounts());
+            Assert.Equal(new Rect(0, 0, 100, 100), dirtyLeaf.Bounds);
+
+            // Invalidating one leaf re-measures the path to it; the untouched clean group is
+            // pruned, and the sibling under the re-measured group is skipped by its own guard.
+            dirtyLeaf.InvalidateMeasure();
+            pipeline.ExecuteFrame(root, new Size(100, 100), new Rect(0, 0, 100, 100));
+
+            Assert.Equal((2, 1, 1), MeasureCounts());
+            Assert.Equal(new Rect(0, 0, 100, 100), dirtyLeaf.Bounds);
+
+            (int, int, int) MeasureCounts() => (
+                ((CountingAlgorithm)dirtyLeaf.LayoutAlgorithm!).MeasureCount,
+                ((CountingAlgorithm)siblingLeaf.LayoutAlgorithm!).MeasureCount,
+                ((CountingAlgorithm)otherLeaf.LayoutAlgorithm!).MeasureCount);
+        }
+
+        private sealed class CountingAlgorithm(LayoutNodeInputs inputs, Size size) : LayoutAlgorithm(inputs)
+        {
+            public int MeasureCount { get; private set; }
+
+            public override Size MeasureContent(Size availableSize)
+            {
+                MeasureCount++;
+                return size;
+            }
+        }
+
+        [Fact]
         public void Exceptions_From_Worker_Items_Propagate_To_The_Caller()
         {
             var root = new PipelineControl(inputs => new OverlayLayoutAlgorithm(inputs));

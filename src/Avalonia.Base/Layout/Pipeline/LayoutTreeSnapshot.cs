@@ -38,6 +38,39 @@ public readonly struct LayoutNodeInputs(
 }
 
 /// <summary>
+/// The per-node data written once when the snapshot builder adds a node — grouped into a
+/// single struct so that adding a node performs one sequential record write instead of
+/// scattering across parallel arrays, and ordered to fit one cache line.
+/// </summary>
+internal struct LayoutNodeRecord
+{
+    /// <summary>
+    /// Classic arrange guard: the rect of the previous arrange pass when the node and its
+    /// whole subtree are still arrange-valid, or NaN — which never compares equal — otherwise.
+    /// </summary>
+    public Rect PreviousArrangeRect;
+
+    /// <summary>
+    /// Classic measure guard: the constraint of the previous measure pass when the node and
+    /// its whole subtree are still measure-valid, or NaN — which never compares equal —
+    /// otherwise.
+    /// </summary>
+    public Size PreviousMeasureSize;
+
+    /// <summary>The parent node index, -1 for the root.</summary>
+    public int Parent;
+
+    /// <summary>The index into <see cref="LayoutTreeSnapshot.ChildrenFlat"/>, -1 for the root.</summary>
+    public int IndexInParent;
+
+    public bool IsVisible;
+
+    public bool IsMeasureValid;
+
+    public bool IsArrangeValid;
+}
+
+/// <summary>
 /// The output of the snapshot stage of the <see cref="LayoutPipeline"/>: an immutable,
 /// index-based copy of the opted-in part of a visual tree, stored as structure-of-arrays.
 /// </summary>
@@ -53,9 +86,7 @@ public readonly struct LayoutNodeInputs(
 internal sealed class LayoutTreeSnapshot(
     ArraySegment<Layoutable> controls,
     ArraySegment<LayoutAlgorithm> algorithms,
-    ArraySegment<bool> isVisible,
-    ArraySegment<int> parent,
-    ArraySegment<int> indexInParent,
+    ArraySegment<LayoutNodeRecord> nodes,
     ArraySegment<int> childrenStart,
     ArraySegment<int> childrenCount,
     ArraySegment<int> childrenFlat,
@@ -68,9 +99,7 @@ internal sealed class LayoutTreeSnapshot(
     // Tree structure and inputs: immutable once built.
     public ArraySegment<Layoutable> Controls = controls;
     public ArraySegment<LayoutAlgorithm> Algorithms = algorithms;
-    public ArraySegment<bool> IsVisible = isVisible;
-    public ArraySegment<int> Parent = parent; // -1 for the root
-    public ArraySegment<int> IndexInParent = indexInParent; // index into ChildrenFlat, -1 for the root
+    public ArraySegment<LayoutNodeRecord> Nodes = nodes;
     public ArraySegment<int> ChildrenStart = childrenStart;
     public ArraySegment<int> ChildrenCount = childrenCount;
     public ArraySegment<int> ChildrenFlat = childrenFlat;
@@ -82,6 +111,7 @@ internal sealed class LayoutTreeSnapshot(
     public ArraySegment<Size> ChildMeasuredSizes = Rent<Size>(childrenFlat.Count); // aligned with ChildrenFlat
     public ArraySegment<Rect> ChildSlots = Rent<Rect>(childrenFlat.Count); // aligned with ChildrenFlat
     public ArraySegment<Rect> Bounds = Rent<Rect>(controls.Count);
+    public ArraySegment<bool> Measured = Rent<bool>(controls.Count, clear: true);
     public ArraySegment<bool> Arranged = Rent<bool>(controls.Count, clear: true);
 
     // Wavefront scheduling state, used when a stage runs on the LayoutWorkerPool: the size
@@ -96,6 +126,24 @@ internal sealed class LayoutTreeSnapshot(
 
     public int Count
         => Controls.Count;
+
+    /// <summary>
+    /// Prefills the outputs with the previously published desired sizes, so that subtrees
+    /// skipped by the classic validity guard — including their unvisited descendants — expose
+    /// correct values to parent combines, to the arrange stage and to publish.
+    /// </summary>
+    public void PrefillPreviousDesiredSizes()
+    {
+        for (var node = 0; node < Controls.Count; node++)
+        {
+            var desiredSize = Controls[node].DesiredSize;
+            DesiredSize[node] = desiredSize;
+
+            var flatIndex = Nodes.GetRef(node).IndexInParent;
+            if (flatIndex >= 0)
+                ChildMeasuredSizes[flatIndex] = desiredSize;
+        }
+    }
 
     private static ArraySegment<T> Rent<T>(int count, bool clear = false)
     {
@@ -120,9 +168,7 @@ internal sealed class LayoutTreeSnapshot(
     {
         Return(ref Controls);
         Return(ref Algorithms);
-        Return(ref IsVisible);
-        Return(ref Parent);
-        Return(ref IndexInParent);
+        Return(ref Nodes);
         Return(ref ChildrenStart);
         Return(ref ChildrenCount);
         Return(ref ChildrenFlat);
@@ -132,6 +178,7 @@ internal sealed class LayoutTreeSnapshot(
         Return(ref ChildMeasuredSizes);
         Return(ref ChildSlots);
         Return(ref Bounds);
+        Return(ref Measured);
         Return(ref Arranged);
 
         Return(ref NodeAvailableSize);

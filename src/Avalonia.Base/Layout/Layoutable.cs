@@ -419,16 +419,22 @@ namespace Avalonia.Layout
         /// Publish stage of the <see cref="Pipeline.LayoutPipeline"/>: makes the results
         /// computed against the layout snapshot observable on this control.
         /// </summary>
-        internal void PublishPipelineLayout(Size desiredSize, Rect? bounds)
+        internal void PublishPipelineLayout(Size desiredSize, Size? previousMeasure, Rect? bounds, Rect? previousArrange)
         {
             DesiredSize = desiredSize;
             IsMeasureValid = true;
 
-            if (bounds is { } b)
+            if (previousMeasure is { } measureConstraint)
+                _previousMeasure = measureConstraint;
+
+            if (bounds is { } newBounds)
             {
-                Bounds = b;
+                Bounds = newBounds;
                 IsArrangeValid = true;
             }
+
+            if (previousArrange is { } arrangeRect)
+                _previousArrange = arrangeRect;
         }
 
         /// <summary>
