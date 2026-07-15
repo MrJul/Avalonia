@@ -166,7 +166,7 @@ public sealed class LayoutPipeline
         var constrainedSize = ComputeConstrainedSize(tree, node, availableSize);
         tree.NodeConstrainedSize[node] = constrainedSize;
 
-        var algorithm = tree.Algorithms[node];
+        var algorithm = tree.Nodes[node].Algorithm;
         ref readonly var children = ref tree.Children.GetRef(node);
         var firstChild = children.FirstChild;
         var count = children.Count;
@@ -210,7 +210,7 @@ public sealed class LayoutPipeline
             if (parent < 0)
                 return;
 
-            var algorithm = tree.Algorithms[parent];
+            var algorithm = tree.Nodes[parent].Algorithm;
             ref readonly var parentChildren = ref tree.Children.GetRef(parent);
             var firstChild = parentChildren.FirstChild;
             var count = parentChildren.Count;
@@ -274,7 +274,7 @@ public sealed class LayoutPipeline
         tree.NodeAvailableSize[node] = availableSize;
 
         var constrainedSize = ComputeConstrainedSize(tree, node, availableSize);
-        var algorithm = tree.Algorithms[node];
+        var algorithm = tree.Nodes[node].Algorithm;
         ref readonly var children = ref tree.Children.GetRef(node);
         var childCount = children.Count;
         Size measured;
@@ -323,7 +323,7 @@ public sealed class LayoutPipeline
     /// </summary>
     private static Size ComputeConstrainedSize(LayoutTreeSnapshot tree, int node, Size availableSize)
     {
-        ref readonly var inputs = ref tree.Algorithms[node].Inputs;
+        ref readonly var inputs = ref tree.Nodes[node].Algorithm.Inputs;
         var margin = inputs.Margin;
 
         if (inputs.UseLayoutRounding)
@@ -338,7 +338,7 @@ public sealed class LayoutPipeline
     /// </summary>
     private static Size FinalizeDesiredSize(LayoutTreeSnapshot tree, int node, Size availableSize, Size measured)
     {
-        ref readonly var inputs = ref tree.Algorithms[node].Inputs;
+        ref readonly var inputs = ref tree.Nodes[node].Algorithm.Inputs;
         var scale = tree.Scale;
         var margin = inputs.Margin;
         var useLayoutRounding = inputs.UseLayoutRounding;
@@ -475,7 +475,7 @@ public sealed class LayoutPipeline
     /// </summary>
     private void ArrangeNodeCore(LayoutTreeSnapshot tree, int node, Rect finalRect)
     {
-        ref readonly var inputs = ref tree.Algorithms[node].Inputs;
+        ref readonly var inputs = ref tree.Nodes[node].Algorithm.Inputs;
         var scale = tree.Scale;
         var useLayoutRounding = inputs.UseLayoutRounding;
         var margin = inputs.Margin;
@@ -522,7 +522,7 @@ public sealed class LayoutPipeline
         {
             var firstChild = children.FirstChild;
 
-            tree.Algorithms[node].ArrangeChildren(
+            tree.Nodes[node].Algorithm.ArrangeChildren(
                 size,
                 desiredSize,
                 tree.DesiredSize.AsSpan(firstChild, childCount),
@@ -569,7 +569,7 @@ public sealed class LayoutPipeline
     /// </summary>
     private static void PublishStage(LayoutTreeSnapshot tree)
     {
-        for (var node = 0; node < tree.Count; node++)
+        for (var node = 0; node < tree.Nodes.Count; node++)
         {
             var measured = tree.Measured[node];
             var arranged = tree.Arranged[node];
@@ -579,14 +579,14 @@ public sealed class LayoutPipeline
             if (!measured && !arranged)
                 continue;
 
-            var control = tree.Controls[node];
+            var control = tree.Nodes[node].Control;
             Size? previousMeasure = measured ? tree.NodeAvailableSize[node] : null;
 
             if (arranged)
             {
                 var bounds = tree.Bounds[node];
                 control.PublishPipelineLayout(tree.DesiredSize[node], previousMeasure, bounds, tree.NodeSlot[node]);
-                tree.Algorithms[node].OnPublish(control, bounds.Size);
+                tree.Nodes[node].Algorithm.OnPublish(control, bounds.Size);
             }
             else
             {

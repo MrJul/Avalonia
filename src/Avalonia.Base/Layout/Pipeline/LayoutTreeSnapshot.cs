@@ -44,6 +44,10 @@ public readonly struct LayoutNodeInputs(
 /// </summary>
 internal struct LayoutNodeRecord
 {
+    public required Layoutable Control;
+
+    public required LayoutAlgorithm Algorithm;
+
     /// <summary>
     /// Classic arrange guard: the rect of the previous arrange pass when the node and its
     /// whole subtree are still arrange-valid, or NaN — which never compares equal — otherwise.
@@ -101,8 +105,6 @@ internal struct LayoutNodeChildren
 /// patching of a persistent snapshot), an explicit child index mapping must come back.
 /// </remarks>
 internal sealed class LayoutTreeSnapshot(
-    ArraySegment<Layoutable> controls,
-    ArraySegment<LayoutAlgorithm> algorithms,
     ArraySegment<LayoutNodeRecord> nodes,
     ArraySegment<bool> isVisible,
     ArraySegment<LayoutNodeChildren> children,
@@ -113,8 +115,6 @@ internal sealed class LayoutTreeSnapshot(
     public const int RootIndex = 0;
 
     // Tree structure and inputs: immutable once built.
-    public ArraySegment<Layoutable> Controls = controls;
-    public ArraySegment<LayoutAlgorithm> Algorithms = algorithms;
     public ArraySegment<LayoutNodeRecord> Nodes = nodes;
 
     // Dense so that a per-parent slice can be handed to the layout algorithms, which may need
@@ -130,22 +130,19 @@ internal sealed class LayoutTreeSnapshot(
     // descendants — expose correct sizes to parent combines, arrange and publish. Thanks to
     // the breadth-first contiguity, it doubles as every parent's child sizes span.
     public ArraySegment<Size> DesiredSize = desiredSize;
-    public ArraySegment<Rect> Bounds = Rent<Rect>(controls.Count);
-    public ArraySegment<bool> Measured = Rent<bool>(controls.Count, clear: true);
-    public ArraySegment<bool> Arranged = Rent<bool>(controls.Count, clear: true);
+    public ArraySegment<Rect> Bounds = Rent<Rect>(nodes.Count);
+    public ArraySegment<bool> Measured = Rent<bool>(nodes.Count, clear: true);
+    public ArraySegment<bool> Arranged = Rent<bool>(nodes.Count, clear: true);
 
     // Wavefront scheduling state, used when a stage runs on the LayoutWorkerPool: the size
     // made available to a node, its constrained size, the slot rect assigned by its parent,
     // and the completion tracking of its children (a countdown for independent containers,
     // a cursor for sequential ones).
-    public ArraySegment<Size> NodeAvailableSize = Rent<Size>(controls.Count);
-    public ArraySegment<Size> NodeConstrainedSize = Rent<Size>(controls.Count);
-    public ArraySegment<Rect> NodeSlot = Rent<Rect>(controls.Count);
-    public ArraySegment<int> PendingChildren = Rent<int>(controls.Count);
-    public ArraySegment<int> SequentialCursor = Rent<int>(controls.Count);
-
-    public int Count
-        => Controls.Count;
+    public ArraySegment<Size> NodeAvailableSize = Rent<Size>(nodes.Count);
+    public ArraySegment<Size> NodeConstrainedSize = Rent<Size>(nodes.Count);
+    public ArraySegment<Rect> NodeSlot = Rent<Rect>(nodes.Count);
+    public ArraySegment<int> PendingChildren = Rent<int>(nodes.Count);
+    public ArraySegment<int> SequentialCursor = Rent<int>(nodes.Count);
 
     private static ArraySegment<T> Rent<T>(int count, bool clear = false)
     {
@@ -168,8 +165,6 @@ internal sealed class LayoutTreeSnapshot(
 
     public void Dispose()
     {
-        Return(ref Controls);
-        Return(ref Algorithms);
         Return(ref Nodes);
         Return(ref IsVisible);
         Return(ref Children);

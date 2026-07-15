@@ -12,8 +12,6 @@ internal sealed class LayoutTreeSnapshotBuilder
     private static readonly Size s_invalidSize = new(double.NaN, double.NaN);
     private static readonly Rect s_invalidRect = new(double.NaN, double.NaN, double.NaN, double.NaN);
 
-    private ArrayBuilder<Layoutable> _controls = new();
-    private ArrayBuilder<LayoutAlgorithm> _algorithms = new();
     private ArrayBuilder<LayoutNodeRecord> _nodes = new();
     private ArrayBuilder<bool> _isVisible = new();
     private ArrayBuilder<LayoutNodeChildren> _children = new();
@@ -38,9 +36,9 @@ internal sealed class LayoutTreeSnapshotBuilder
         // Breadth-first: each dequeued node appends its opted-in children contiguously, so a
         // node's children are exactly the node range [FirstChild, FirstChild + Count) — no
         // child index mapping is needed as long as the tree is built this way.
-        for (var node = 0; node < _controls.Count; node++)
+        for (var node = 0; node < _nodes.Count; node++)
         {
-            var firstChild = _controls.Count;
+            var firstChild = _nodes.Count;
             var count = 0;
 
             // An invisible node measures to an empty size without visiting its children, like
@@ -49,7 +47,7 @@ internal sealed class LayoutTreeSnapshotBuilder
             {
                 // Enumerate the exact collection the classic implementation lays out (e.g.
                 // Panel.Children, Decorator.Child), which defaults to the visual children.
-                var control = _controls[node];
+                var control = _nodes[node].Control;
                 var layoutChildrenCount = control.GetLayoutChildrenCount();
 
                 for (var i = 0; i < layoutChildrenCount; i++)
@@ -84,7 +82,7 @@ internal sealed class LayoutTreeSnapshotBuilder
         // propagates the validity guard sentinels upwards: a node keeps its previous
         // measure/arrange value only when its whole subtree is valid, so the guard checked by
         // the measure and arrange stages is a single comparison per node.
-        for (var node = _controls.Count - 1; node >= 0; node--)
+        for (var node = _nodes.Count - 1; node >= 0; node--)
         {
             ref var children = ref _children.GetRef(node);
             var size = 1;
@@ -123,8 +121,6 @@ internal sealed class LayoutTreeSnapshotBuilder
         }
 
         return new LayoutTreeSnapshot(
-            _controls.GetAndClear(),
-            _algorithms.GetAndClear(),
             _nodes.GetAndClear(),
             _isVisible.GetAndClear(),
             _children.GetAndClear(),
@@ -133,9 +129,7 @@ internal sealed class LayoutTreeSnapshotBuilder
 
         int AddNode(Layoutable control, LayoutAlgorithm algorithm, int parentNode, bool isVisible)
         {
-            var index = _controls.Count;
-            _controls.Add(control);
-            _algorithms.Add(algorithm);
+            var index = _nodes.Count;
             _isVisible.Add(isVisible);
 
             // Prefill the snapshot's desired sizes with the previously published value, so that
@@ -145,6 +139,8 @@ internal sealed class LayoutTreeSnapshotBuilder
 
             _nodes.Add(new LayoutNodeRecord
             {
+                Control = control,
+                Algorithm = algorithm,
                 IsMeasureValid = control.IsMeasureValid,
                 IsArrangeValid = control.IsArrangeValid,
                 PreviousMeasureSize = control.PreviousMeasure.GetValueOrDefault(s_invalidSize),
