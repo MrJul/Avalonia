@@ -16,8 +16,7 @@ internal sealed class LayoutTreeSnapshotBuilder
     private ArrayBuilder<LayoutAlgorithm> _algorithms = new();
     private ArrayBuilder<LayoutNodeRecord> _nodes = new();
     private ArrayBuilder<bool> _isVisible = new();
-    private ArrayBuilder<int> _firstChild = new();
-    private ArrayBuilder<int> _childrenCount = new();
+    private ArrayBuilder<LayoutNodeChildren> _children = new();
     private ArrayBuilder<Size> _desiredSize = new();
 
     /// <summary>
@@ -37,49 +36,47 @@ internal sealed class LayoutTreeSnapshotBuilder
         AddNode(root, rootAlgorithm, -1, root.IsVisible);
 
         // Breadth-first: each dequeued node appends its opted-in children contiguously, so a
-        // node's children are exactly the node range [FirstChild, FirstChild + count) — no
+        // node's children are exactly the node range [FirstChild, FirstChild + Count) — no
         // child index mapping is needed as long as the tree is built this way.
         for (var node = 0; node < _controls.Count; node++)
         {
-            _firstChild.Add(_controls.Count);
+            var firstChild = _controls.Count;
+            var count = 0;
 
             // An invisible node measures to an empty size without visiting its children, like
             // the classic MeasureCore: its subtree is pruned from the snapshot.
-            if (!_isVisible[node])
+            if (_isVisible[node])
             {
-                _childrenCount.Add(0);
-                continue;
+                // Enumerate the exact collection the classic implementation lays out (e.g.
+                // Panel.Children, Decorator.Child), which defaults to the visual children.
+                var control = _controls[node];
+                var layoutChildrenCount = control.GetLayoutChildrenCount();
+
+                for (var i = 0; i < layoutChildrenCount; i++)
+                {
+                    if (control.GetLayoutChild(i) is not { LayoutAlgorithm: { } algorithm } child)
+                        continue;
+
+                    // Styling may itself change the visibility, apply before checking for IsVisible
+                    child.ApplyStyling();
+
+                    // Invisible children are included so that, like in the classic engine, they
+                    // measure to an empty size and record the pass — but they aren't templated
+                    // and their subtree isn't visited.
+                    var isVisible = child.IsVisible;
+
+                    if (isVisible)
+                        child.ApplyTemplate();
+
+                    var index = AddNode(child, algorithm, node, isVisible);
+                    Debug.Assert(index == firstChild + count,
+                        "Breadth-first construction must assign contiguous indices to a node's children.");
+                    count++;
+                }
             }
 
-            // Enumerate the exact collection the classic implementation lays out (e.g.
-            // Panel.Children, Decorator.Child), which defaults to the visual children.
-            var control = _controls[node];
-            var layoutChildrenCount = control.GetLayoutChildrenCount();
-            var count = 0;
-
-            for (var i = 0; i < layoutChildrenCount; i++)
-            {
-                if (control.GetLayoutChild(i) is not { LayoutAlgorithm: { } algorithm } child)
-                    continue;
-
-                // Styling may itself change the visibility, apply before checking for IsVisible
-                child.ApplyStyling();
-
-                // Invisible children are included so that, like in the classic engine, they
-                // measure to an empty size and record the pass — but they aren't templated
-                // and their subtree isn't visited.
-                var isVisible = child.IsVisible;
-
-                if (isVisible)
-                    child.ApplyTemplate();
-
-                var index = AddNode(child, algorithm, node, isVisible);
-                Debug.Assert(index == _firstChild[node] + count,
-                    "Breadth-first construction must assign contiguous indices to a node's children.");
-                count++;
-            }
-
-            _childrenCount.Add(count);
+            // SubtreeSize is computed by the reverse pass below.
+            _children.Add(new LayoutNodeChildren { FirstChild = firstChild, Count = count });
         }
 
         // Children always have larger indices than their parent, so a reverse scan accumulates
@@ -87,21 +84,19 @@ internal sealed class LayoutTreeSnapshotBuilder
         // propagates the validity guard sentinels upwards: a node keeps its previous
         // measure/arrange value only when its whole subtree is valid, so the guard checked by
         // the measure and arrange stages is a single comparison per node.
-        var subtreeSizeArray = ArrayPool<int>.Shared.Rent(_controls.Count);
-        var subtreeSize = new ArraySegment<int>(subtreeSizeArray, 0, _controls.Count);
-
         for (var node = _controls.Count - 1; node >= 0; node--)
         {
+            ref var children = ref _children.GetRef(node);
             var size = 1;
-            var firstChild = _firstChild[node];
-            var end = firstChild + _childrenCount[node];
+            var firstChild = children.FirstChild;
+            var end = firstChild + children.Count;
             ref var record = ref _nodes.GetRef(node);
             var isSubtreeMeasureValid = record.IsMeasureValid;
             var isSubtreeArrangeValid = record.IsArrangeValid;
 
             for (var child = firstChild; child < end; child++)
             {
-                size += subtreeSize[child];
+                size += _children.GetRef(child).SubtreeSize;
 
                 ref readonly var childRecord = ref _nodes.GetRef(child);
                 isSubtreeMeasureValid &= childRecord.IsMeasureValid;
@@ -112,7 +107,7 @@ internal sealed class LayoutTreeSnapshotBuilder
                     isSubtreeArrangeValid &= childRecord.IsArrangeValid;
             }
 
-            subtreeSize[node] = size;
+            children.SubtreeSize = size;
 
             if (!isSubtreeMeasureValid)
             {
@@ -132,9 +127,7 @@ internal sealed class LayoutTreeSnapshotBuilder
             _algorithms.GetAndClear(),
             _nodes.GetAndClear(),
             _isVisible.GetAndClear(),
-            _firstChild.GetAndClear(),
-            _childrenCount.GetAndClear(),
-            subtreeSize,
+            _children.GetAndClear(),
             _desiredSize.GetAndClear(),
             scale);
 

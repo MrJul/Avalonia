@@ -66,6 +66,26 @@ internal struct LayoutNodeRecord
 }
 
 /// <summary>
+/// The children and subtree data of a node, written by the snapshot builder — grouped into a
+/// single struct because the three fields are read together on every hot path: the work item
+/// expansion, the combines, the arrange stage and the parallelism threshold check.
+/// </summary>
+internal struct LayoutNodeChildren
+{
+    /// <summary>
+    /// The node index of the first child: thanks to the breadth-first construction, the
+    /// children are the contiguous node range [FirstChild, FirstChild + Count).
+    /// </summary>
+    public int FirstChild;
+
+    /// <summary>The number of children.</summary>
+    public int Count;
+
+    /// <summary>The number of nodes in the subtree, including the node itself.</summary>
+    public int SubtreeSize;
+}
+
+/// <summary>
 /// The output of the snapshot stage of the <see cref="LayoutPipeline"/>: an immutable,
 /// index-based copy of the opted-in part of a visual tree, stored as structure-of-arrays.
 /// </summary>
@@ -75,7 +95,8 @@ internal struct LayoutNodeRecord
 /// run on multiple threads without synchronization. No live control is touched until the
 /// publish stage.
 /// Nodes are indexed in breadth-first order (the root is <see cref="RootIndex"/>), so the
-/// children of any node are the contiguous node range starting at <see cref="FirstChild"/>.
+/// children of any node are the contiguous node range starting at
+/// <see cref="LayoutNodeChildren.FirstChild"/>.
 /// The builder asserts that invariant; if a future change breaks it (e.g. incremental
 /// patching of a persistent snapshot), an explicit child index mapping must come back.
 /// </remarks>
@@ -84,9 +105,7 @@ internal sealed class LayoutTreeSnapshot(
     ArraySegment<LayoutAlgorithm> algorithms,
     ArraySegment<LayoutNodeRecord> nodes,
     ArraySegment<bool> isVisible,
-    ArraySegment<int> firstChild,
-    ArraySegment<int> childrenCount,
-    ArraySegment<int> subtreeSize,
+    ArraySegment<LayoutNodeChildren> children,
     ArraySegment<Size> desiredSize,
     double scale)
     : IDisposable
@@ -102,9 +121,7 @@ internal sealed class LayoutTreeSnapshot(
     // to treat invisible children specially like their classic implementations do.
     public ArraySegment<bool> IsVisible = isVisible;
 
-    public ArraySegment<int> FirstChild = firstChild;
-    public ArraySegment<int> ChildrenCount = childrenCount;
-    public ArraySegment<int> SubtreeSize = subtreeSize;
+    public ArraySegment<LayoutNodeChildren> Children = children;
     public readonly double Scale = scale;
 
     // Outputs: each measure/arrange task writes to indices no other task reads or writes.
@@ -155,9 +172,7 @@ internal sealed class LayoutTreeSnapshot(
         Return(ref Algorithms);
         Return(ref Nodes);
         Return(ref IsVisible);
-        Return(ref FirstChild);
-        Return(ref ChildrenCount);
-        Return(ref SubtreeSize);
+        Return(ref Children);
 
         Return(ref DesiredSize);
         Return(ref Bounds);

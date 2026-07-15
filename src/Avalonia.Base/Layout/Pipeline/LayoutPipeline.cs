@@ -121,7 +121,10 @@ public sealed class LayoutPipeline
     }
 
     private bool ShouldProcessInline(LayoutTreeSnapshot tree, int node)
-        => tree.ChildrenCount[node] == 0 || tree.SubtreeSize[node] < ParallelismThreshold;
+    {
+        ref readonly var children = ref tree.Children.GetRef(node);
+        return children.Count == 0 || children.SubtreeSize < ParallelismThreshold;
+    }
 
     private sealed class MeasureProcessor : ILayoutWorkProcessor
     {
@@ -164,8 +167,9 @@ public sealed class LayoutPipeline
         tree.NodeConstrainedSize[node] = constrainedSize;
 
         var algorithm = tree.Algorithms[node];
-        var firstChild = tree.FirstChild[node];
-        var count = tree.ChildrenCount[node];
+        ref readonly var children = ref tree.Children.GetRef(node);
+        var firstChild = children.FirstChild;
+        var count = children.Count;
 
         if (algorithm.MeasureDependency == LayoutChildrenDependency.Sequential)
         {
@@ -207,8 +211,9 @@ public sealed class LayoutPipeline
                 return;
 
             var algorithm = tree.Algorithms[parent];
-            var firstChild = tree.FirstChild[parent];
-            var count = tree.ChildrenCount[parent];
+            ref readonly var parentChildren = ref tree.Children.GetRef(parent);
+            var firstChild = parentChildren.FirstChild;
+            var count = parentChildren.Count;
 
             if (algorithm.MeasureDependency == LayoutChildrenDependency.Sequential)
             {
@@ -270,7 +275,8 @@ public sealed class LayoutPipeline
 
         var constrainedSize = ComputeConstrainedSize(tree, node, availableSize);
         var algorithm = tree.Algorithms[node];
-        var childCount = tree.ChildrenCount[node];
+        ref readonly var children = ref tree.Children.GetRef(node);
+        var childCount = children.Count;
         Size measured;
 
         if (childCount == 0)
@@ -279,7 +285,7 @@ public sealed class LayoutPipeline
         }
         else
         {
-            var firstChild = tree.FirstChild[node];
+            var firstChild = children.FirstChild;
 
             if (algorithm.MeasureDependency == LayoutChildrenDependency.Sequential)
             {
@@ -430,8 +436,9 @@ public sealed class LayoutPipeline
 
         // The children slots were written directly into NodeSlot by ArrangeNodeCore, thanks
         // to the breadth-first contiguity: just push the children.
-        var firstChild = tree.FirstChild[node];
-        var count = tree.ChildrenCount[node];
+        ref readonly var children = ref tree.Children.GetRef(node);
+        var firstChild = children.FirstChild;
+        var count = children.Count;
 
         for (var i = 0; i < count; i++)
             LayoutWorkerPool.Instance.Enqueue(firstChild + i);
@@ -453,8 +460,9 @@ public sealed class LayoutPipeline
 
         ArrangeNodeCore(tree, node, finalRect);
 
-        var firstChild = tree.FirstChild[node];
-        var count = tree.ChildrenCount[node];
+        ref readonly var children = ref tree.Children.GetRef(node);
+        var firstChild = children.FirstChild;
+        var count = children.Count;
 
         for (var i = 0; i < count; i++)
             ArrangeNode(tree, firstChild + i, tree.NodeSlot[firstChild + i]);
@@ -507,11 +515,12 @@ public sealed class LayoutPipeline
             availableSizeMinusMargins = LayoutHelper.RoundLayoutSizeUp(availableSizeMinusMargins, scale);
         }
 
-        var childCount = tree.ChildrenCount[node];
+        ref readonly var children = ref tree.Children.GetRef(node);
+        var childCount = children.Count;
 
         if (childCount > 0)
         {
-            var firstChild = tree.FirstChild[node];
+            var firstChild = children.FirstChild;
 
             tree.Algorithms[node].ArrangeChildren(
                 size,
