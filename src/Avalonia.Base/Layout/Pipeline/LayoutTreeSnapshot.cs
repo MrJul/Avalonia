@@ -11,22 +11,30 @@ namespace Avalonia.Layout.Pipeline;
 /// The property values a node needs during the measure and arrange stages, captured on the
 /// UI thread by the snapshot stage so that the parallel stages never touch the property system.
 /// </summary>
-internal readonly struct LayoutNodeInputs
+[UnconditionalSuppressMessage("Performance", "CA1815:Override equals and operator equals on value types")]
+public readonly struct LayoutNodeInputs(
+    Thickness margin,
+    HorizontalAlignment horizontalAlignment,
+    VerticalAlignment verticalAlignment,
+    bool useLayoutRounding,
+    double layoutScale,
+    MinMax minMax)
 {
-    public readonly Thickness Margin;
-    public readonly HorizontalAlignment HorizontalAlignment;
-    public readonly VerticalAlignment VerticalAlignment;
-    public readonly bool UseLayoutRounding;
-    public readonly MinMax MinMax;
+    public readonly Thickness Margin = margin;
+    public readonly HorizontalAlignment HorizontalAlignment = horizontalAlignment;
+    public readonly VerticalAlignment VerticalAlignment = verticalAlignment;
+    public readonly bool UseLayoutRounding = useLayoutRounding;
+    public readonly double LayoutScale = layoutScale;
+    public readonly MinMax MinMax = minMax;
 
-    public LayoutNodeInputs(Layoutable control)
-    {
-        Margin = control.Margin;
-        HorizontalAlignment = control.HorizontalAlignment;
-        VerticalAlignment = control.VerticalAlignment;
-        UseLayoutRounding = control.UseLayoutRounding;
-        MinMax = new MinMax(control);
-    }
+    public static LayoutNodeInputs FromLayoutable(Layoutable layoutable)
+        => new(
+            layoutable.Margin,
+            layoutable.HorizontalAlignment,
+            layoutable.VerticalAlignment,
+            layoutable.UseLayoutRounding,
+            LayoutHelper.GetLayoutScale(layoutable),
+            new MinMax(layoutable));
 }
 
 /// <summary>
@@ -45,7 +53,6 @@ internal readonly struct LayoutNodeInputs
 internal sealed class LayoutTreeSnapshot(
     ArraySegment<Layoutable> controls,
     ArraySegment<LayoutAlgorithm> algorithms,
-    ArraySegment<LayoutNodeInputs> inputs,
     ArraySegment<bool> isVisible,
     ArraySegment<int> parent,
     ArraySegment<int> indexInParent,
@@ -61,7 +68,6 @@ internal sealed class LayoutTreeSnapshot(
     // Tree structure and inputs: immutable once built.
     public ArraySegment<Layoutable> Controls = controls;
     public ArraySegment<LayoutAlgorithm> Algorithms = algorithms;
-    public ArraySegment<LayoutNodeInputs> Inputs = inputs;
     public ArraySegment<bool> IsVisible = isVisible;
     public ArraySegment<int> Parent = parent; // -1 for the root
     public ArraySegment<int> IndexInParent = indexInParent; // index into ChildrenFlat, -1 for the root
@@ -76,7 +82,7 @@ internal sealed class LayoutTreeSnapshot(
     public ArraySegment<Size> ChildMeasuredSizes = Rent<Size>(childrenFlat.Count); // aligned with ChildrenFlat
     public ArraySegment<Rect> ChildSlots = Rent<Rect>(childrenFlat.Count); // aligned with ChildrenFlat
     public ArraySegment<Rect> Bounds = Rent<Rect>(controls.Count);
-    public ArraySegment<bool> Arranged = Rent<bool>(controls.Count);
+    public ArraySegment<bool> Arranged = Rent<bool>(controls.Count, clear: true);
 
     // Wavefront scheduling state, used when a stage runs on the LayoutWorkerPool: the size
     // made available to a node, its constrained size, the slot rect assigned by its parent,
@@ -91,10 +97,13 @@ internal sealed class LayoutTreeSnapshot(
     public int Count
         => Controls.Count;
 
-    private static ArraySegment<T> Rent<T>(int count)
+    private static ArraySegment<T> Rent<T>(int count, bool clear = false)
     {
         var array = ArrayPool<T>.Shared.Rent(count);
-        Array.Clear(array, 0, count);
+
+        if (clear)
+            Array.Clear(array, 0, count);
+
         return new ArraySegment<T>(array, 0, count);
     }
 
@@ -111,7 +120,6 @@ internal sealed class LayoutTreeSnapshot(
     {
         Return(ref Controls);
         Return(ref Algorithms);
-        Return(ref Inputs);
         Return(ref IsVisible);
         Return(ref Parent);
         Return(ref IndexInParent);

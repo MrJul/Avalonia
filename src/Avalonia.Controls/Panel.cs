@@ -3,6 +3,8 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using Avalonia.Controls.Presenters;
+using Avalonia.Layout;
+using Avalonia.Layout.Pipeline;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Metadata;
@@ -132,8 +134,17 @@ namespace Avalonia.Controls
         /// replace, so only exact <see cref="Panel"/> instances opt into the layout pipeline;
         /// derived panels opt in by providing their own algorithm.
         /// </summary>
-        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
-            => GetType() == typeof(Panel) ? Layout.Pipeline.LayoutAlgorithm.Overlay : null;
+        protected override LayoutAlgorithm? ComputeLayoutAlgorithm()
+            => GetType() == typeof(Panel) ? new OverlayLayoutAlgorithm(LayoutNodeInputs.FromLayoutable(this)) : null;
+
+        /// <summary>
+        /// Panels lay out <see cref="Children"/>, not their visual children, like their classic
+        /// measure/arrange implementations do.
+        /// </summary>
+        protected internal override int GetLayoutChildrenCount() => Children.Count;
+
+        /// <inheritdoc cref="GetLayoutChildrenCount"/>
+        protected internal override Layoutable? GetLayoutChild(int index) => Children[index];
 
         /// <summary>
         /// Called when the <see cref="Children"/> collection changes.

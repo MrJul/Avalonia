@@ -10,6 +10,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Layout.Pipeline;
 
 namespace Avalonia.Controls
 {
@@ -224,8 +225,8 @@ namespace Avalonia.Controls
         }
 
         /// <inheritdoc/>
-        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
-            => new StackPanelLayoutAlgorithm(Orientation, Spacing);
+        protected override Layout.Pipeline.LayoutAlgorithm? ComputeLayoutAlgorithm()
+            => new StackPanelLayoutAlgorithm(LayoutNodeInputs.FromLayoutable(this), Orientation, Spacing);
 
         /// <summary>
         /// General StackPanel layout behavior is to grow unbounded in the "stacking" direction (Size To Content).

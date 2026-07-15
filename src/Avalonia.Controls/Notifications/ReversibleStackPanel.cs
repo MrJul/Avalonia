@@ -33,7 +33,7 @@ namespace Avalonia.Controls
         /// This panel customizes the classic arrange below, which the algorithm inherited from
         /// <see cref="StackPanel"/> doesn't replicate: opt out of the layout pipeline.
         /// </summary>
-        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm() => null;
+        protected override Layout.Pipeline.LayoutAlgorithm? ComputeLayoutAlgorithm() => null;
 
         /// <inheritdoc/>
         protected override Size ArrangeOverride(Size finalSize)

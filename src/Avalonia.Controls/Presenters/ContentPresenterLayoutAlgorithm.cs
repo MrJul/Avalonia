@@ -14,21 +14,16 @@ internal sealed class ContentPresenterLayoutAlgorithm : DecoratorLayoutAlgorithm
 {
     private readonly HorizontalAlignment _horizontalContentAlignment;
     private readonly VerticalAlignment _verticalContentAlignment;
-    private readonly bool _useLayoutRounding;
-    private readonly double _scale;
 
     public ContentPresenterLayoutAlgorithm(
+        LayoutNodeInputs inputs,
         Thickness padding,
         HorizontalAlignment horizontalContentAlignment,
-        VerticalAlignment verticalContentAlignment,
-        bool useLayoutRounding,
-        double scale)
-        : base(padding)
+        VerticalAlignment verticalContentAlignment)
+        : base(inputs, padding)
     {
         _horizontalContentAlignment = horizontalContentAlignment;
         _verticalContentAlignment = verticalContentAlignment;
-        _useLayoutRounding = useLayoutRounding;
-        _scale = scale;
     }
 
     public override void ArrangeChildren(Size finalSize, Size desiredSize, ReadOnlySpan<Size> childSizes, Span<Rect> childSlots)
@@ -48,10 +43,10 @@ internal sealed class ContentPresenterLayoutAlgorithm : DecoratorLayoutAlgorithm
             sizeForChild = sizeForChild.WithHeight(Math.Min(sizeForChild.Height, desiredSize.Height));
         }
 
-        if (_useLayoutRounding)
+        if (Inputs.UseLayoutRounding)
         {
-            sizeForChild = LayoutHelper.RoundLayoutSizeUp(sizeForChild, _scale);
-            availableSize = LayoutHelper.RoundLayoutSizeUp(availableSize, _scale);
+            sizeForChild = LayoutHelper.RoundLayoutSizeUp(sizeForChild, Inputs.LayoutScale);
+            availableSize = LayoutHelper.RoundLayoutSizeUp(availableSize, Inputs.LayoutScale);
         }
 
         switch (_horizontalContentAlignment)
@@ -76,9 +71,9 @@ internal sealed class ContentPresenterLayoutAlgorithm : DecoratorLayoutAlgorithm
 
         var origin = new Point(originX, originY);
 
-        if (_useLayoutRounding)
+        if (Inputs.UseLayoutRounding)
         {
-            origin = LayoutHelper.RoundLayoutPoint(origin, _scale);
+            origin = LayoutHelper.RoundLayoutPoint(origin, Inputs.LayoutScale);
         }
 
         childSlots.Fill(new Rect(origin, sizeForChild).Deflate(Padding));

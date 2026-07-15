@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.TextInput;
 using Avalonia.Layout;
+using Avalonia.Layout.Pipeline;
 using Avalonia.LogicalTree;
 using Avalonia.Platform;
 using Avalonia.Rendering;
@@ -20,11 +21,11 @@ namespace Avalonia.UnitTests
         private readonly NameScope _nameScope = new NameScope();
         private FocusManager? _focusManager;
 
-        public TestRoot()
+        public TestRoot(bool usePipeline = false)
         {
             Renderer = RendererMocks.CreateRenderer().Object;
             HitTester = new NullHitTester();
-            LayoutManager = new LayoutManager(this);
+            LayoutManager = usePipeline ? new PipelineLayoutManager(this, () => ClientSize) : new LayoutManager(this);
             IsVisible = true;
             KeyboardNavigation.SetTabNavigation(this, KeyboardNavigationMode.Cycle);
             SetPresentationSourceForRootVisual(this);

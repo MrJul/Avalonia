@@ -9,7 +9,6 @@ internal sealed class LayoutTreeSnapshotBuilder
 {
     private ArrayBuilder<Layoutable> _controls = new();
     private ArrayBuilder<LayoutAlgorithm> _algorithms = new();
-    private ArrayBuilder<LayoutNodeInputs> _inputs = new();
     private ArrayBuilder<bool> _isVisible = new();
     private ArrayBuilder<int> _parent = new();
     private ArrayBuilder<int> _indexInParent = new();
@@ -18,12 +17,16 @@ internal sealed class LayoutTreeSnapshotBuilder
     private ArrayBuilder<int> _childrenFlat = new();
 
     /// <summary>
-    /// Builds a snapshot of the subtree rooted at <paramref name="root"/>, including only the
-    /// controls providing a <see cref="LayoutAlgorithm"/>. Children that don't opt in are
-    /// excluded along with their whole subtree: they won't be measured, arranged or rendered.
-    /// Invisible children are excluded too, matching the classic engine where they always
-    /// measure to an empty size and containers skip them (e.g. for spacing) — this way
-    /// algorithms only ever see visible children. Returns null if the root itself doesn't opt in.
+    /// Builds a snapshot of the subtree rooted at <paramref name="root"/> (assumed already
+    /// prepared), running the prepare stage on each visited child in the same walk: a child is
+    /// styled and templated right before its opt-in check and its input capture, so styled
+    /// values are in effect when captured and template-created children are visited in turn.
+    /// The snapshot includes only the controls providing a <see cref="LayoutAlgorithm"/>:
+    /// children that don't opt in are excluded along with their whole subtree — they won't be
+    /// measured, arranged or rendered. Invisible children are excluded (and left unprepared)
+    /// too, matching the classic engine where they always measure to an empty size without
+    /// being styled, and containers skip them (e.g. for spacing) — this way algorithms only
+    /// ever see visible children.
     /// </summary>
     public LayoutTreeSnapshot Build(Layoutable root, LayoutAlgorithm rootAlgorithm, double scale)
     {
@@ -34,17 +37,30 @@ internal sealed class LayoutTreeSnapshotBuilder
         {
             _childrenStart.Add(_childrenFlat.Count);
 
-            var visualChildren = _controls[node].VisualChildren;
+            // Enumerate the exact collection the classic implementation lays out (e.g.
+            // Panel.Children, Decorator.Child), which defaults to the visual children.
+            var control = _controls[node];
+            var layoutChildrenCount = control.GetLayoutChildrenCount();
             var count = 0;
 
-            for (var i = 0; i < visualChildren.Count; i++)
+            for (var i = 0; i < layoutChildrenCount; i++)
             {
-                if (visualChildren[i] is Layoutable { IsVisible: true } layoutable &&
-                    layoutable.GetLayoutAlgorithm() is { } algorithm)
+                if (control.GetLayoutChild(i) is not { } child)
+                    continue;
+
+                // Styling may itself change the visibility, apply before checking for IsVisible
+                child.ApplyStyling();
+
+                if (child.IsVisible)
                 {
-                    var flatIndex = _childrenFlat.Count;
-                    _childrenFlat.Add(AddNode(layoutable, algorithm, node, flatIndex));
-                    count++;
+                    child.ApplyTemplate();
+
+                    if (child.LayoutAlgorithm is { } algorithm)
+                    {
+                        var flatIndex = _childrenFlat.Count;
+                        _childrenFlat.Add(AddNode(child, algorithm, node, flatIndex));
+                        count++;
+                    }
                 }
             }
 
@@ -71,7 +87,6 @@ internal sealed class LayoutTreeSnapshotBuilder
         return new LayoutTreeSnapshot(
             _controls.GetAndClear(),
             _algorithms.GetAndClear(),
-            _inputs.GetAndClear(),
             _isVisible.GetAndClear(),
             _parent.GetAndClear(),
             _indexInParent.GetAndClear(),
@@ -86,7 +101,6 @@ internal sealed class LayoutTreeSnapshotBuilder
             var index = _controls.Count;
             _controls.Add(control);
             _algorithms.Add(algorithm);
-            _inputs.Add(new LayoutNodeInputs(control));
             _isVisible.Add(control.IsVisible);
             _parent.Add(parentNode);
             _indexInParent.Add(flatIndex);
@@ -96,7 +110,7 @@ internal sealed class LayoutTreeSnapshotBuilder
 
     private struct ArrayBuilder<T>
     {
-        private const int DefaultCapacity = 256;
+        private const int DefaultCapacity = 4096;
 
         private T[] _items;
         private int _size;

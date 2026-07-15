@@ -21,7 +21,8 @@ internal sealed class StackPanelLayoutAlgorithm : LayoutAlgorithm
     private readonly bool _horizontal;
     private readonly double _spacing;
 
-    public StackPanelLayoutAlgorithm(Orientation orientation, double spacing)
+    public StackPanelLayoutAlgorithm(LayoutNodeInputs inputs, Orientation orientation, double spacing)
+        : base(inputs)
     {
         _horizontal = orientation == Orientation.Horizontal;
         _spacing = spacing;

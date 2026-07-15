@@ -2,6 +2,7 @@ using System;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Templates;
 using Avalonia.Interactivity;
+using Avalonia.Layout.Pipeline;
 using Avalonia.Logging;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
@@ -309,8 +310,8 @@ namespace Avalonia.Controls.Primitives
         /// and the like) inherit the layout pipeline opt-in as a family; types overriding
         /// measure/arrange stay out until they provide their own algorithm.
         /// </summary>
-        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
-            => HasDefaultLayoutMethods() ? Layout.Pipeline.LayoutAlgorithm.Overlay : null;
+        protected override LayoutAlgorithm? ComputeLayoutAlgorithm()
+            => HasDefaultLayoutMethods() ? new OverlayLayoutAlgorithm(LayoutNodeInputs.FromLayoutable(this)) : null;
 
         /// <inheritdoc/>
         public sealed override void ApplyTemplate()

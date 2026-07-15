@@ -4,6 +4,7 @@ using Avalonia.Automation.Peers;
 using Avalonia.Controls.Chrome;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Layout.Pipeline;
 using Avalonia.LogicalTree;
 using Avalonia.Reactive;
 
@@ -50,10 +51,14 @@ internal partial class TopLevelHost : Control
     /// decoration inset acting as padding when set. Non-opted-in decoration layers are skipped
     /// by the pipeline, so the inset algorithm only ever applies to the top level child.
     /// </summary>
-    protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
-        => _decorationInset == default ?
-            Layout.Pipeline.LayoutAlgorithm.Overlay :
-            new DecoratorLayoutAlgorithm(_decorationInset);
+    protected override LayoutAlgorithm ComputeLayoutAlgorithm()
+    {
+        var inputs = LayoutNodeInputs.FromLayoutable(this);
+
+        return _decorationInset == default ?
+            new OverlayLayoutAlgorithm(inputs) :
+            new DecoratorLayoutAlgorithm(inputs, _decorationInset);
+    }
 
     protected override Size MeasureOverride(Size availableSize)
     {

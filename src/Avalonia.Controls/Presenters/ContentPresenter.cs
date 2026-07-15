@@ -7,6 +7,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Controls.Utils;
 using Avalonia.Layout;
+using Avalonia.Layout.Pipeline;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Metadata;
@@ -658,29 +659,37 @@ namespace Avalonia.Controls.Presenters
         }
 
         /// <inheritdoc/>
-        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
+        protected override LayoutAlgorithm ComputeLayoutAlgorithm()
         {
+            var inputs = LayoutNodeInputs.FromLayoutable(this);
+
             var padding = Padding;
             var borderThickness = BorderThickness;
-            var useLayoutRounding = UseLayoutRounding;
-            var scale = LayoutHelper.GetLayoutScale(this);
 
             // The classic engine rounds the padding and border thickness separately on every
             // pass; the pipeline captures the result once since the scale is constant during
             // a frame.
-            if (useLayoutRounding)
+            if (inputs.UseLayoutRounding)
             {
-                padding = LayoutHelper.RoundLayoutThickness(padding, scale);
-                borderThickness = LayoutHelper.RoundLayoutThickness(borderThickness, scale);
+                padding = LayoutHelper.RoundLayoutThickness(padding, inputs.LayoutScale);
+                borderThickness = LayoutHelper.RoundLayoutThickness(borderThickness, inputs.LayoutScale);
             }
 
             return new ContentPresenterLayoutAlgorithm(
+                inputs,
                 padding + borderThickness,
                 HorizontalContentAlignment,
-                VerticalContentAlignment,
-                useLayoutRounding,
-                scale);
+                VerticalContentAlignment);
         }
+
+        /// <summary>
+        /// A content presenter lays out its single <see cref="Child"/>, like its classic
+        /// measure/arrange implementations do — never other visual children.
+        /// </summary>
+        protected internal override int GetLayoutChildrenCount() => Child is null ? 0 : 1;
+
+        /// <inheritdoc cref="GetLayoutChildrenCount"/>
+        protected internal override Layoutable? GetLayoutChild(int index) => Child;
 
         /// <inheritdoc/>
         protected override Size MeasureOverride(Size availableSize)

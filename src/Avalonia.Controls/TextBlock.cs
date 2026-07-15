@@ -5,6 +5,7 @@ using Avalonia.Automation.Peers;
 using Avalonia.Collections;
 using Avalonia.Controls.Documents;
 using Avalonia.Layout;
+using Avalonia.Layout.Pipeline;
 using Avalonia.Media;
 using Avalonia.Media.TextFormatting;
 using Avalonia.Metadata;
@@ -665,21 +666,60 @@ namespace Avalonia.Controls
         /// </summary>
         internal TextLayout CreateTextLayout(string? text, Size constraint, TextAlignment textAlignment)
         {
-            var typeface = new Typeface(FontFamily, FontStyle, FontWeight, FontStretch);
+            var defaultProperties = CreateDefaultProperties();
+            var paragraphProperties = CreateParagraphProperties(textAlignment, defaultProperties);
+            var textSource = CreateTextSource(text, defaultProperties);
 
-            var defaultProperties = new GenericTextRunProperties(
-                typeface,
+            return CreateTextLayout(
+                textSource,
+                paragraphProperties,
+                TextTrimming,
+                MaxLines,
+                _textRunCache ??= new TextRunCache(),
+                constraint);
+        }
+
+        internal static TextLayout CreateTextLayout(
+            ITextSource textSource,
+            GenericTextParagraphProperties paragraphProperties,
+            TextTrimming textTrimming,
+            int maxLines,
+            TextRunCache textRunCache,
+            Size constraint)
+        {
+            var maxWidth = double.IsNaN(constraint.Width) ? 0.0 : constraint.Width;
+            var maxHeight = double.IsNaN(constraint.Height) ? 0.0 : constraint.Height;
+
+            return new TextLayout(textSource, paragraphProperties, textTrimming, maxWidth, maxHeight, maxLines, textRunCache);
+        }
+
+        private GenericTextRunProperties CreateDefaultProperties()
+            => new(
+                new Typeface(FontFamily, FontStyle, FontWeight, FontStretch),
                 FontSize,
                 TextDecorations,
                 Foreground,
                 fontFeatures: FontFeatures);
 
-            var paragraphProperties = new GenericTextParagraphProperties(FlowDirection, textAlignment, true, false,
-                defaultProperties, TextWrapping, LineHeight, 0, LetterSpacing)
+        private GenericTextParagraphProperties CreateParagraphProperties(
+            TextAlignment textAlignment,
+            GenericTextRunProperties defaultProperties)
+            => new(
+                FlowDirection,
+                textAlignment,
+                true,
+                false,
+                defaultProperties,
+                TextWrapping,
+                LineHeight,
+                0,
+                LetterSpacing)
             {
                 LineSpacing = LineSpacing
             };
 
+        private ITextSource CreateTextSource(string? text, GenericTextRunProperties defaultProperties)
+        {
             ITextSource textSource;
 
             if (_textRuns != null)
@@ -691,17 +731,7 @@ namespace Avalonia.Controls
                 textSource = new SimpleTextSource(text ?? "", defaultProperties);
             }
 
-            var maxWidth = double.IsNaN(constraint.Width) ? 0.0 : constraint.Width;
-            var maxHeight = double.IsNaN(constraint.Height) ? 0.0 : constraint.Height;
-
-            return new TextLayout(
-                textSource,
-                paragraphProperties,
-                TextTrimming,
-                maxWidth,
-                maxHeight,
-                MaxLines,
-                _textRunCache ??= new TextRunCache());
+            return textSource;
         }
 
         /// <summary>
@@ -735,7 +765,7 @@ namespace Avalonia.Controls
         }
 
         /// <inheritdoc/>
-        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
+        protected override LayoutAlgorithm? ComputeLayoutAlgorithm()
         {
             // Only plain text on exact TextBlock instances: derived types may override
             // CreateTextLayout, and complex (inline) content mutates the visual tree during
@@ -743,12 +773,25 @@ namespace Avalonia.Controls
             if (GetType() != typeof(TextBlock) || HasComplexContent)
                 return null;
 
+            var inputs = LayoutNodeInputs.FromLayoutable(this);
+
             var padding = Padding;
 
-            if (UseLayoutRounding)
+            if (inputs.UseLayoutRounding)
                 padding = LayoutHelper.RoundLayoutThickness(padding, LayoutHelper.GetLayoutScale(this));
 
-            return new TextBlockLayoutAlgorithm(this, padding);
+            var defaultProperties = CreateDefaultProperties();
+            var paragraphProperties = CreateParagraphProperties(TextAlignment, defaultProperties);
+            var textSource = CreateTextSource(Text, defaultProperties);
+
+            return new TextBlockLayoutAlgorithm(
+                inputs,
+                padding,
+                textSource,
+                paragraphProperties,
+                TextTrimming,
+                MaxLines,
+                _textRunCache ??= new TextRunCache());
         }
 
         /// <summary>

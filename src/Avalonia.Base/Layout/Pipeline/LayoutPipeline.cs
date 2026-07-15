@@ -10,12 +10,12 @@ namespace Avalonia.Layout.Pipeline;
 /// <list type="number">
 /// <item><b>Inputs</b> (UI thread, before the frame): bindings, animations and user mutations
 /// are flushed by the dispatcher; the property system is then considered frozen.</item>
-/// <item><b>Prepare</b> (UI thread, mutates the tree): styling and template expansion run to
-/// completion so the tree reaches its final shape. This is the only stage allowed to mutate
-/// controls before publish.</item>
-/// <item><b>Snapshot</b> (UI thread, reads the tree): the opted-in controls are frozen into an
-/// immutable, index-based <see cref="LayoutTreeSnapshot"/>. Controls opt in by overriding
-/// <see cref="Layoutable.GetLayoutAlgorithm"/>; others are skipped entirely and won't render.</item>
+/// <item><b>Prepare + snapshot</b> (UI thread, merged into a single walk): each control is
+/// styled and templated — the only mutations allowed before publish — right before being
+/// frozen into an immutable, index-based <see cref="LayoutTreeSnapshot"/>, so the tree reaches
+/// its final shape as the arena is built. Controls opt in by overriding
+/// <see cref="Layoutable.LayoutAlgorithm"/>; others are skipped entirely, stay unprepared
+/// and won't render.</item>
 /// <item><b>Measure</b> (parallel): a dependency-driven wavefront over the snapshot, executed
 /// on the dedicated <see cref="LayoutWorkerPool"/>. Work items are node indices: a container
 /// pushes its children as items (<see cref="LayoutChildrenDependency.Independent"/> all at
@@ -39,7 +39,7 @@ public sealed class LayoutPipeline
     /// <summary>
     /// Experimental switch: when enabled before a top level is created, its layout is driven by
     /// a <see cref="PipelineLayoutManager"/> instead of the classic engine. Controls that don't
-    /// override <see cref="Layoutable.GetLayoutAlgorithm"/> are then skipped along with their
+    /// override <see cref="Layoutable.LayoutAlgorithm"/> are then skipped along with their
     /// subtree and won't render.
     /// </summary>
     public static bool UseForTopLevels { get; set; }
@@ -64,10 +64,8 @@ public sealed class LayoutPipeline
     {
         // Stage 1 — inputs: assumed already flushed by the dispatcher.
 
-        // Stage 2 — prepare (UI thread): bring the tree to its final shape.
-        PrepareStage(root);
-
-        // Stage 3 — snapshot (UI thread): freeze the opted-in tree into an immutable arena.
+        // Stages 2 + 3 — prepare + snapshot (UI thread), merged into a single walk: each
+        // control is styled and templated right before being captured into the immutable arena.
         using var tree = SnapshotStage(root)
             ?? throw new InvalidOperationException(
                 $"The layout pipeline root ({root.GetType().Name}) must provide a layout algorithm.");
@@ -83,31 +81,19 @@ public sealed class LayoutPipeline
     }
 
     /// <summary>
-    /// Stage 2: applies styling and expands templates over the whole subtree, so that the tree
-    /// has its final shape before it is snapshotted. Children created by template expansion are
-    /// visited in turn as part of the same traversal.
-    /// </summary>
-    private static void PrepareStage(Layoutable control)
-    {
-        control.ApplyStyling();
-        control.ApplyTemplate();
-
-        var children = control.VisualChildren;
-
-        for (var i = 0; i < children.Count; i++)
-        {
-            if (children[i] is Layoutable layoutable)
-                PrepareStage(layoutable);
-        }
-    }
-
-    /// <summary>
-    /// Stage 3: freezes the opted-in controls, their captured layout inputs and the layout
-    /// scale into an immutable structure-of-arrays snapshot.
+    /// Stages 2 and 3, merged into a single walk over the tree: each control is styled and
+    /// templated (stage 2 — the only mutations allowed before publish) right before its
+    /// opt-in check and its capture into the immutable structure-of-arrays snapshot (stage 3),
+    /// so styled values are in effect when captured and template-created children are visited
+    /// in turn. Controls that don't participate in the snapshot are left unprepared, like the
+    /// classic engine that only styles controls when measuring them.
     /// </summary>
     private LayoutTreeSnapshot? SnapshotStage(Layoutable root)
     {
-        if (root.GetLayoutAlgorithm() is not { } algorithm)
+        root.ApplyStyling();
+        root.ApplyTemplate();
+
+        if (root.LayoutAlgorithm is not { } algorithm)
             return null;
 
         var scale = LayoutHelper.GetLayoutScale(root);
@@ -315,7 +301,7 @@ public sealed class LayoutPipeline
     /// </summary>
     private static Size ComputeConstrainedSize(LayoutTreeSnapshot tree, int node, Size availableSize)
     {
-        ref readonly var inputs = ref tree.Inputs.GetRef(node);
+        ref readonly var inputs = ref tree.Algorithms[node].Inputs;
         var margin = inputs.Margin;
 
         if (inputs.UseLayoutRounding)
@@ -330,7 +316,7 @@ public sealed class LayoutPipeline
     /// </summary>
     private static Size FinalizeDesiredSize(LayoutTreeSnapshot tree, int node, Size availableSize, Size measured)
     {
-        ref readonly var inputs = ref tree.Inputs.GetRef(node);
+        ref readonly var inputs = ref tree.Algorithms[node].Inputs;
         var scale = tree.Scale;
         var margin = inputs.Margin;
         var useLayoutRounding = inputs.UseLayoutRounding;
@@ -449,7 +435,7 @@ public sealed class LayoutPipeline
     /// </summary>
     private void ArrangeNodeCore(LayoutTreeSnapshot tree, int node, Rect finalRect)
     {
-        ref readonly var inputs = ref tree.Inputs.GetRef(node);
+        ref readonly var inputs = ref tree.Algorithms[node].Inputs;
         var scale = tree.Scale;
         var useLayoutRounding = inputs.UseLayoutRounding;
         var margin = inputs.Margin;

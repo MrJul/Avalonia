@@ -34,7 +34,7 @@ namespace Avalonia.Base.UnitTests.Layout
                         MaxHeight = 40,
                     };
 
-                    var piped = new PipelineControl(new FixedContentAlgorithm(new Size(25, 15)))
+                    var piped = new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(25, 15)))
                     {
                         Margin = new Thickness(l, t, r, b),
                         HorizontalAlignment = horizontalAlignment,
@@ -63,9 +63,9 @@ namespace Avalonia.Base.UnitTests.Layout
             classicParent.AddChild(classicChild1);
             classicParent.AddChild(classicChild2);
 
-            var pipedChild1 = new PipelineControl(new FixedContentAlgorithm(new Size(30, 10))) { Margin = new Thickness(2) };
-            var pipedChild2 = new PipelineControl(new FixedContentAlgorithm(new Size(20, 40))) { HorizontalAlignment = HorizontalAlignment.Right };
-            var pipedParent = new PipelineControl();
+            var pipedChild1 = new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(30, 10))) { Margin = new Thickness(2) };
+            var pipedChild2 = new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(20, 40))) { HorizontalAlignment = HorizontalAlignment.Right };
+            var pipedParent = new PipelineControl(inputs => new OverlayLayoutAlgorithm(inputs));
             pipedParent.AddChild(pipedChild1);
             pipedParent.AddChild(pipedChild2);
 
@@ -85,10 +85,10 @@ namespace Avalonia.Base.UnitTests.Layout
         [Fact]
         public void Sequential_Algorithm_Stacks_Children()
         {
-            var child1 = new PipelineControl(new FixedContentAlgorithm(new Size(30, 10)));
-            var child2 = new PipelineControl(new FixedContentAlgorithm(new Size(20, 20)));
-            var child3 = new PipelineControl(new FixedContentAlgorithm(new Size(10, 30)));
-            var parent = new PipelineControl(new VerticalStackAlgorithm());
+            var child1 = new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(30, 10)));
+            var child2 = new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(20, 20)));
+            var child3 = new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(10, 30)));
+            var parent = new PipelineControl(inputs => new VerticalStackAlgorithm(inputs));
             parent.AddChild(child1);
             parent.AddChild(child2);
             parent.AddChild(child3);
@@ -105,9 +105,9 @@ namespace Avalonia.Base.UnitTests.Layout
         [Fact]
         public void Non_Opted_In_Children_Are_Skipped()
         {
-            var optedIn = new PipelineControl(new FixedContentAlgorithm(new Size(30, 10)));
+            var optedIn = new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(30, 10)));
             var classic = new ClassicFixedControl { Size = new Size(500, 500) };
-            var parent = new PipelineControl();
+            var parent = new PipelineControl(inputs => new OverlayLayoutAlgorithm(inputs));
             parent.AddChild(optedIn);
             parent.AddChild(classic);
 
@@ -124,9 +124,9 @@ namespace Avalonia.Base.UnitTests.Layout
         [Fact]
         public void Invisible_Nodes_Measure_As_Empty()
         {
-            var visible = new PipelineControl(new FixedContentAlgorithm(new Size(30, 10)));
-            var invisible = new PipelineControl(new FixedContentAlgorithm(new Size(500, 500))) { IsVisible = false };
-            var parent = new PipelineControl();
+            var visible = new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(30, 10)));
+            var invisible = new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(500, 500))) { IsVisible = false };
+            var parent = new PipelineControl(inputs => new OverlayLayoutAlgorithm(inputs));
             parent.AddChild(visible);
             parent.AddChild(invisible);
 
@@ -157,18 +157,18 @@ namespace Avalonia.Base.UnitTests.Layout
             static (PipelineControl Root, List<PipelineControl> Nodes) CreateSequentialTree()
             {
                 var nodes = new List<PipelineControl>();
-                var root = new PipelineControl(new VerticalStackAlgorithm());
+                var root = new PipelineControl(inputs => new VerticalStackAlgorithm(inputs));
                 nodes.Add(root);
 
                 for (var i = 0; i < 15; i++)
                 {
-                    var group = new PipelineControl(new VerticalStackAlgorithm());
+                    var group = new PipelineControl(inputs => new VerticalStackAlgorithm(inputs));
                     nodes.Add(group);
                     root.AddChild(group);
 
                     for (var j = 0; j < 8; j++)
                     {
-                        var leaf = new PipelineControl(new FixedContentAlgorithm(new Size(5 + j, 3 + i)));
+                        var leaf = new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(5 + j, 3 + i)));
                         nodes.Add(leaf);
                         group.AddChild(leaf);
                     }
@@ -181,12 +181,12 @@ namespace Avalonia.Base.UnitTests.Layout
         [Fact]
         public void Exceptions_From_Worker_Items_Propagate_To_The_Caller()
         {
-            var root = new PipelineControl();
+            var root = new PipelineControl(inputs => new OverlayLayoutAlgorithm(inputs));
 
             for (var i = 0; i < 8; i++)
             {
-                var group = new PipelineControl();
-                group.AddChild(new PipelineControl(new ThrowingAlgorithm()));
+                var group = new PipelineControl(inputs => new OverlayLayoutAlgorithm(inputs));
+                group.AddChild(new PipelineControl(_ => new ThrowingAlgorithm()));
                 root.AddChild(group);
             }
 
@@ -198,7 +198,7 @@ namespace Avalonia.Base.UnitTests.Layout
             Assert.Equal("boom", exception.Message);
         }
 
-        private sealed class ThrowingAlgorithm : LayoutAlgorithm
+        private sealed class ThrowingAlgorithm() : LayoutAlgorithm(default)
         {
             public override Size MeasureContent(Size availableSize)
                 => throw new InvalidOperationException("boom");
@@ -227,7 +227,7 @@ namespace Avalonia.Base.UnitTests.Layout
             static (PipelineControl Root, List<Control> Nodes) CreateWideTree()
             {
                 var nodes = new List<Control>();
-                var root = new PipelineControl();
+                var root = new PipelineControl(inputs => new OverlayLayoutAlgorithm(inputs));
                 nodes.Add(root);
 
                 for (var i = 0; i < 20; i++)
@@ -243,7 +243,7 @@ namespace Avalonia.Base.UnitTests.Layout
 
                     for (var j = 0; j < 10; j++)
                     {
-                        var leaf = new PipelineControl(new FixedContentAlgorithm(new Size(10 + i, 5 + j)))
+                        var leaf = new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(10 + i, 5 + j)))
                         {
                             HorizontalAlignment = j % 2 == 0 ? HorizontalAlignment.Left : HorizontalAlignment.Stretch,
                         };
@@ -260,7 +260,7 @@ namespace Avalonia.Base.UnitTests.Layout
         public void Border_And_Decorator_Match_Classic_Engine()
         {
             var classicRoot = CreateTree(new ClassicFixedControl { Size = new Size(30, 10), HorizontalAlignment = HorizontalAlignment.Center });
-            var pipedRoot = CreateTree(new PipelineControl(new FixedContentAlgorithm(new Size(30, 10))) { HorizontalAlignment = HorizontalAlignment.Center });
+            var pipedRoot = CreateTree(new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(30, 10))) { HorizontalAlignment = HorizontalAlignment.Center });
 
             classicRoot.Measure(new Size(200, 200));
             classicRoot.Arrange(new Rect(0, 0, 200, 200));
@@ -296,6 +296,51 @@ namespace Avalonia.Base.UnitTests.Layout
         }
 
         [Fact]
+        public void Decorator_Lays_Out_Only_Its_Child()
+        {
+            var classicDecorator = CreateDecorator(size => new ClassicFixedControl { Size = size });
+            var pipedDecorator = CreateDecorator(size => new PipelineControl(inputs => new FixedContentAlgorithm(inputs, size)));
+
+            classicDecorator.Measure(new Size(200, 200));
+            classicDecorator.Arrange(new Rect(0, 0, 200, 200));
+
+            new LayoutPipeline().ExecuteFrame(pipedDecorator, new Size(200, 200), new Rect(0, 0, 200, 200));
+
+            // The extra visual child takes part in layout in neither engine: it doesn't
+            // contribute to the desired size and is never measured nor arranged.
+            Assert.Equal(classicDecorator.DesiredSize, pipedDecorator.DesiredSize);
+            Assert.Equal(classicDecorator.Bounds, pipedDecorator.Bounds);
+            Assert.Equal(classicDecorator.Child!.Bounds, pipedDecorator.Child!.Bounds);
+            Assert.Equal(classicDecorator.Extra.Bounds, pipedDecorator.Extra.Bounds);
+            Assert.Equal(default, pipedDecorator.Extra.Bounds);
+
+            static ExtraVisualDecorator CreateDecorator(Func<Size, Control> createLeaf)
+            {
+                var decorator = new ExtraVisualDecorator
+                {
+                    Padding = new Thickness(3),
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    VerticalAlignment = VerticalAlignment.Top,
+                    Child = createLeaf(new Size(10, 10)),
+                };
+
+                decorator.AddExtra(createLeaf(new Size(50, 50)));
+                return decorator;
+            }
+        }
+
+        private class ExtraVisualDecorator : Decorator
+        {
+            public Control Extra { get; private set; } = null!;
+
+            public void AddExtra(Control control)
+            {
+                Extra = control;
+                VisualChildren.Add(control);
+            }
+        }
+
+        [Fact]
         public void ContentPresenter_Matches_Classic_Engine()
         {
             foreach (var horizontalContentAlignment in Enum.GetValues<HorizontalAlignment>())
@@ -308,7 +353,7 @@ namespace Avalonia.Base.UnitTests.Layout
                         verticalContentAlignment);
 
                     var pipedPresenter = CreatePresenter(
-                        new PipelineControl(new FixedContentAlgorithm(new Size(30, 10))),
+                        new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(30, 10))),
                         horizontalContentAlignment,
                         verticalContentAlignment);
 
@@ -355,7 +400,7 @@ namespace Avalonia.Base.UnitTests.Layout
         public void StackPanel_Matches_Classic_Engine(Orientation orientation, double spacing)
         {
             var classicPanel = CreatePanel(orientation, spacing, size => new ClassicFixedControl { Size = size });
-            var pipedPanel = CreatePanel(orientation, spacing, size => new PipelineControl(new FixedContentAlgorithm(size)));
+            var pipedPanel = CreatePanel(orientation, spacing, size => new PipelineControl(inputs => new FixedContentAlgorithm(inputs, size)));
 
             classicPanel.Measure(new Size(200, 200));
             classicPanel.Arrange(new Rect(0, 0, 200, 200));
@@ -404,7 +449,7 @@ namespace Avalonia.Base.UnitTests.Layout
         public void Panel_Matches_Classic_Engine()
         {
             var classicPanel = CreatePanel(size => new ClassicFixedControl { Size = size });
-            var pipedPanel = CreatePanel(size => new PipelineControl(new FixedContentAlgorithm(size)));
+            var pipedPanel = CreatePanel(size => new PipelineControl(inputs => new FixedContentAlgorithm(inputs, size)));
 
             classicPanel.Measure(new Size(200, 200));
             classicPanel.Arrange(new Rect(0, 0, 200, 200));
@@ -438,15 +483,15 @@ namespace Avalonia.Base.UnitTests.Layout
         [Fact]
         public void Derived_Panel_Does_Not_Opt_In()
         {
-            Assert.NotNull(new Panel().GetLayoutAlgorithm());
-            Assert.Null(new DerivedPanel().GetLayoutAlgorithm());
+            Assert.NotNull(new Panel().LayoutAlgorithm);
+            Assert.Null(new DerivedPanel().LayoutAlgorithm);
         }
 
         [Fact]
         public void VisualLayerManager_Matches_Classic_Engine()
         {
             var classicManager = CreateManager(new ClassicFixedControl { Size = new Size(30, 10) });
-            var pipedManager = CreateManager(new PipelineControl(new FixedContentAlgorithm(new Size(30, 10))));
+            var pipedManager = CreateManager(new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(30, 10))));
 
             classicManager.Measure(new Size(200, 200));
             classicManager.Arrange(new Rect(0, 0, 200, 200));
@@ -556,7 +601,7 @@ namespace Avalonia.Base.UnitTests.Layout
             using var app = UnitTestApplication.Start(TestServices.MockPlatformRenderInterface);
 
             var classicButton = CreateButton(new ClassicFixedControl { Size = new Size(30, 10) });
-            var pipedButton = CreateButton(new PipelineControl(new FixedContentAlgorithm(new Size(30, 10))));
+            var pipedButton = CreateButton(new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(30, 10))));
 
             classicButton.Measure(new Size(200, 200));
             classicButton.Arrange(new Rect(0, 0, 200, 200));
@@ -596,9 +641,9 @@ namespace Avalonia.Base.UnitTests.Layout
         [Fact]
         public void Templated_Controls_Opt_In_Unless_They_Customize_Layout()
         {
-            Assert.NotNull(new Button().GetLayoutAlgorithm());
-            Assert.NotNull(new PlainDerivedButton().GetLayoutAlgorithm());
-            Assert.Null(new CustomMeasureButton().GetLayoutAlgorithm());
+            Assert.NotNull(new Button().LayoutAlgorithm);
+            Assert.NotNull(new PlainDerivedButton().LayoutAlgorithm);
+            Assert.Null(new CustomMeasureButton().LayoutAlgorithm);
         }
 
         private class PlainDerivedButton : Button
@@ -613,7 +658,7 @@ namespace Avalonia.Base.UnitTests.Layout
         [Fact]
         public void PipelineLayoutManager_Lays_Out_On_Demand()
         {
-            var child = new PipelineControl(new FixedContentAlgorithm(new Size(30, 10)));
+            var child = new PipelineControl(inputs => new FixedContentAlgorithm(inputs, new Size(30, 10)));
             var root = new PipedRoot { Padding = new Thickness(10), Child = child };
             var manager = new PipelineLayoutManager(root, () => new Size(100, 100));
             root.SetLayoutManager(manager);
@@ -630,7 +675,7 @@ namespace Avalonia.Base.UnitTests.Layout
             Assert.Equal(new Rect(10, 10, 30, 80), child.Bounds);
 
             // Drain the layout pass queued on the dispatcher by InvalidateMeasure.
-            Threading.Dispatcher.UIThread.RunJobs();
+            Threading.Dispatcher.UIThread.RunJobs(null, TestContext.Current.CancellationToken);
         }
 
         private class PipedRoot : Border, ILayoutRoot
@@ -644,14 +689,10 @@ namespace Avalonia.Base.UnitTests.Layout
             public Layoutable RootVisual => this;
         }
 
-        private class PipelineControl : Control
+        private class PipelineControl(Func<LayoutNodeInputs, LayoutAlgorithm> createAlgorithm) : Control
         {
-            private readonly LayoutAlgorithm _algorithm;
-
-            public PipelineControl(LayoutAlgorithm? algorithm = null)
-                => _algorithm = algorithm ?? LayoutAlgorithm.Overlay;
-
-            protected internal override LayoutAlgorithm? GetLayoutAlgorithm() => _algorithm;
+            protected override LayoutAlgorithm? ComputeLayoutAlgorithm()
+                => createAlgorithm(LayoutNodeInputs.FromLayoutable(this));
 
             public void AddChild(Layoutable child) => VisualChildren.Add(child);
         }
@@ -668,16 +709,12 @@ namespace Avalonia.Base.UnitTests.Layout
             protected override Size MeasureOverride(Size availableSize) => Size;
         }
 
-        private sealed class FixedContentAlgorithm : LayoutAlgorithm
+        private sealed class FixedContentAlgorithm(LayoutNodeInputs inputs, Size size) : LayoutAlgorithm(inputs)
         {
-            private readonly Size _size;
-
-            public FixedContentAlgorithm(Size size) => _size = size;
-
-            public override Size MeasureContent(Size availableSize) => _size;
+            public override Size MeasureContent(Size availableSize) => size;
         }
 
-        private sealed class VerticalStackAlgorithm : LayoutAlgorithm
+        private sealed class VerticalStackAlgorithm(LayoutNodeInputs inputs) : LayoutAlgorithm(inputs)
         {
             public override LayoutChildrenDependency MeasureDependency => LayoutChildrenDependency.Sequential;
 

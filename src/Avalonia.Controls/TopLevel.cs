@@ -24,6 +24,7 @@ using Avalonia.Input.Platform;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Diagnostics;
+using Avalonia.Layout.Pipeline;
 using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 
@@ -746,8 +747,8 @@ namespace Avalonia.Controls
         /// what allows them to act as the root of the experimental layout pipeline when
         /// <see cref="Layout.Pipeline.LayoutPipeline.UseForTopLevels"/> is enabled.
         /// </summary>
-        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
-            => Layout.Pipeline.LayoutAlgorithm.Overlay;
+        protected override LayoutAlgorithm ComputeLayoutAlgorithm()
+            => new OverlayLayoutAlgorithm(LayoutNodeInputs.FromLayoutable(this));
 
         protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
         {

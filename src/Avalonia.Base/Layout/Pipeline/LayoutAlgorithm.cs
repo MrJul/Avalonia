@@ -28,7 +28,7 @@ public enum LayoutChildrenDependency
 /// The declarative layout protocol consumed by the experimental <see cref="LayoutPipeline"/>,
 /// replacing the imperative <see cref="Layoutable.MeasureOverride"/> and
 /// <see cref="Layoutable.ArrangeOverride"/> methods. Controls opt in by returning an instance
-/// from <see cref="Layoutable.GetLayoutAlgorithm"/>.
+/// from <see cref="Layoutable.LayoutAlgorithm"/>.
 /// </summary>
 /// <remarks>
 /// Implementations MUST be pure: the pipeline invokes these methods outside the UI thread,
@@ -40,15 +40,12 @@ public enum LayoutChildrenDependency
 /// deal with content and children.
 /// </remarks>
 [Unstable]
-public abstract class LayoutAlgorithm
+public abstract class LayoutAlgorithm(LayoutNodeInputs inputs)
 {
-    /// <summary>
-    /// Gets a trivial algorithm with overlay semantics, equivalent to the default
-    /// <see cref="Layoutable.MeasureOverride"/>/<see cref="Layoutable.ArrangeOverride"/>:
-    /// every child receives the full available size and is arranged over the full final size,
-    /// and the desired size is the maximum of the children sizes.
-    /// </summary>
-    public static LayoutAlgorithm Overlay { get; } = new OverlayLayoutAlgorithm();
+    private readonly LayoutNodeInputs _inputs = inputs;
+
+    public ref readonly LayoutNodeInputs Inputs
+        => ref _inputs;
 
     /// <summary>
     /// Gets how the size made available to each child relates to its siblings during measure.
@@ -120,10 +117,6 @@ public abstract class LayoutAlgorithm
     /// <param name="control">The live control the node was snapshotted from.</param>
     /// <param name="finalSize">The final arranged size of the control.</param>
     public virtual void OnPublish(Layoutable control, Size finalSize)
-    {
-    }
-
-    private sealed class OverlayLayoutAlgorithm : LayoutAlgorithm
     {
     }
 }

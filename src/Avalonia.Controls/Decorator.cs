@@ -1,4 +1,5 @@
 using Avalonia.Layout;
+using Avalonia.Layout.Pipeline;
 using Avalonia.Metadata;
 using Avalonia.Platform;
 using Avalonia.Styling;
@@ -50,9 +51,11 @@ namespace Avalonia.Controls
             set => SetValue(PaddingProperty, value);
         }
 
-        /// <inheritdoc/>
-        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
-            => new DecoratorLayoutAlgorithm(GetLayoutPadding(UseLayoutRounding, LayoutHelper.GetLayoutScale(this)));
+        protected override LayoutAlgorithm ComputeLayoutAlgorithm()
+        {
+            var inputs = LayoutNodeInputs.FromLayoutable(this);
+            return new DecoratorLayoutAlgorithm(inputs, GetLayoutPadding(inputs.UseLayoutRounding, inputs.LayoutScale));
+        }
 
         /// <summary>
         /// Gets the total thickness placed around the <see cref="Child"/> during layout,
@@ -62,6 +65,15 @@ namespace Avalonia.Controls
         /// </summary>
         private protected virtual Thickness GetLayoutPadding(bool useLayoutRounding, double scale)
             => useLayoutRounding ? LayoutHelper.RoundLayoutThickness(Padding, scale) : Padding;
+
+        /// <summary>
+        /// A decorator lays out its single <see cref="Child"/>, like its classic
+        /// measure/arrange implementations do — never other visual children.
+        /// </summary>
+        protected internal override int GetLayoutChildrenCount() => Child is null ? 0 : 1;
+
+        /// <inheritdoc cref="GetLayoutChildrenCount"/>
+        protected internal override Layoutable? GetLayoutChild(int index) => Child;
 
         /// <inheritdoc/>
         protected override Size MeasureOverride(Size availableSize)

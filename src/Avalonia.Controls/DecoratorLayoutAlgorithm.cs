@@ -9,11 +9,10 @@ namespace Avalonia.Controls;
 /// (plus the border thickness for a border), and the desired size is the child's size
 /// inflated back by it. The padding is captured pre-rounded at snapshot time.
 /// </summary>
-internal class DecoratorLayoutAlgorithm : LayoutAlgorithm
+internal class DecoratorLayoutAlgorithm(LayoutNodeInputs inputs, Thickness padding)
+    : LayoutAlgorithm(inputs)
 {
-    public DecoratorLayoutAlgorithm(Thickness padding) => Padding = padding;
-
-    protected Thickness Padding { get; }
+    protected Thickness Padding { get; } = padding;
 
     public override Size MeasureContent(Size availableSize)
         => new Size().Inflate(Padding);

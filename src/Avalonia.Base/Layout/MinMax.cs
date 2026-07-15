@@ -1,8 +1,10 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 
 namespace Avalonia.Layout;
 
-internal struct MinMax
+[UnconditionalSuppressMessage("Performance", "CA1815:Override equals and operator equals on value types")]
+public struct MinMax
 {
     public double MinWidth;
     public double MaxWidth;

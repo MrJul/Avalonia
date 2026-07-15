@@ -19,7 +19,7 @@ public sealed class PipelineLayoutManager : ILayoutManager
 {
     private readonly ILayoutRoot _owner;
     private readonly Func<Size>? _availableSize;
-    private readonly LayoutPipeline _pipeline = new();
+    private readonly LayoutPipeline _pipeline = new() { ParallelismThreshold = int.MaxValue };
     private readonly Action _invokeOnRender;
     private bool _dirty = true;
     private bool _queued;
@@ -53,7 +53,7 @@ public sealed class PipelineLayoutManager : ILayoutManager
         if (_disposed || !_dirty || _running)
             return;
 
-        if (_owner.RootVisual is not { } root || root.GetLayoutAlgorithm() is null)
+        if (_owner.RootVisual is not { LayoutAlgorithm: not null } root)
             return;
 
         _dirty = false;

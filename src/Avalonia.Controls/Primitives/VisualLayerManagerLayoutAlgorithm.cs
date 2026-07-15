@@ -14,12 +14,8 @@ internal sealed class VisualLayerManagerLayoutAlgorithm : LayoutAlgorithm
     private readonly Thickness _padding;
     private readonly int _childIndex;
 
-    /// <param name="padding">The pre-rounded padding around the decorated child.</param>
-    /// <param name="childIndex">
-    /// The index of the decorated child among the children the snapshot will include,
-    /// or -1 if the child is null or excluded.
-    /// </param>
-    public VisualLayerManagerLayoutAlgorithm(Thickness padding, int childIndex)
+    public VisualLayerManagerLayoutAlgorithm(LayoutNodeInputs inputs, Thickness padding, int childIndex)
+        : base(inputs)
     {
         _padding = padding;
         _childIndex = childIndex;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using Avalonia.Diagnostics;
+using Avalonia.Layout.Pipeline;
 using Avalonia.Logging;
 using Avalonia.Reactive;
 using Avalonia.Styling;
@@ -140,6 +141,7 @@ namespace Avalonia.Layout
         private EventHandler<EffectiveViewportChangedEventArgs>? _effectiveViewportChanged;
         private EventHandler? _layoutUpdated;
         private bool _isAttachingToVisualTree;
+        private LayoutAlgorithm? _layoutAlgorithm;
 
         /// <summary>
         /// Initializes static members of the <see cref="Layoutable"/> class.
@@ -361,13 +363,34 @@ namespace Avalonia.Layout
         {
         }
 
+        public LayoutAlgorithm? LayoutAlgorithm
+            => _layoutAlgorithm ??= ComputeLayoutAlgorithm();
+
         /// <summary>
         /// Gets the declarative algorithm used to lay out this control by the experimental
         /// <see cref="Pipeline.LayoutPipeline"/>, or null if this control only supports the
         /// classic Measure/Arrange path. Controls opt into the pipeline by overriding this
         /// method; controls that don't are skipped by the pipeline along with their subtree.
         /// </summary>
-        protected internal virtual Pipeline.LayoutAlgorithm? GetLayoutAlgorithm() => null;
+        protected virtual LayoutAlgorithm? ComputeLayoutAlgorithm() => null;
+
+        protected void InvalidateLayoutAlgorithm()
+            => _layoutAlgorithm = null;
+
+        /// <summary>
+        /// Gets the number of children the layout pipeline algorithm acts on. Together with
+        /// <see cref="GetLayoutChild"/>, this mirrors the exact collection the classic layout
+        /// implementation uses: the default matches the default MeasureOverride/ArrangeOverride
+        /// acting on the visual children, while e.g. a panel exposes its Children and a
+        /// decorator its single Child.
+        /// </summary>
+        protected internal virtual int GetLayoutChildrenCount() => VisualChildrenList.Count;
+
+        /// <summary>
+        /// Gets a child the layout pipeline algorithm acts on, or null if the child doesn't
+        /// take part in layout. See <see cref="GetLayoutChildrenCount"/>.
+        /// </summary>
+        protected internal virtual Layoutable? GetLayoutChild(int index) => VisualChildrenList[index] as Layoutable;
 
         private static readonly ConcurrentDictionary<Type, bool> s_hasDefaultLayoutMethods = new();
 
@@ -551,7 +574,14 @@ namespace Avalonia.Layout
             where T : Layoutable
         {
             var invalidateObserver = new AnonymousObserver<AvaloniaPropertyChangedEventArgs>(
-                static e => (e.Sender as T)?.InvalidateMeasure());
+                static e =>
+                {
+                    if (e.Sender is T typedSender)
+                    {
+                        typedSender.InvalidateLayoutAlgorithm();
+                        typedSender.InvalidateMeasure();
+                    }
+                });
 
             foreach (var property in properties)
             {
@@ -572,7 +602,14 @@ namespace Avalonia.Layout
             where T : Layoutable
         {
             var invalidate = new AnonymousObserver<AvaloniaPropertyChangedEventArgs>(
-                static e => (e.Sender as T)?.InvalidateArrange());
+                static e =>
+                {
+                    if (e.Sender is T typedSender)
+                    {
+                        typedSender.InvalidateLayoutAlgorithm();
+                        typedSender.InvalidateArrange();
+                    }
+                });
 
             foreach (var property in properties)
             {

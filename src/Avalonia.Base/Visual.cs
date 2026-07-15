@@ -125,6 +125,7 @@ namespace Avalonia
                 (s, h) => s.Invalidated += h,
                 (s, h) => s.Invalidated -= h);
 
+        private readonly AvaloniaList<Visual> _visualChildren;
         private Rect _bounds;
         internal IPresentationSource? PresentationSource { get; private set; }
         private Visual? _visualParent;
@@ -163,7 +164,7 @@ namespace Avalonia
             visualChildren.ResetBehavior = ResetBehavior.Remove;
             visualChildren.Validator = this;
             visualChildren.CollectionChanged += VisualChildrenChanged;
-            VisualChildren = visualChildren;
+            _visualChildren = visualChildren;
         }
 
         /// <summary>
@@ -340,7 +341,13 @@ namespace Avalonia
         /// <summary>
         /// Gets the control's child visuals.
         /// </summary>
-        protected internal IAvaloniaList<Visual> VisualChildren { get; }
+        protected internal IAvaloniaList<Visual> VisualChildren => _visualChildren;
+
+        /// <summary>
+        /// The concrete list behind <see cref="VisualChildren"/>, letting hot paths such as the
+        /// layout pipeline snapshot enumerate the children without interface dispatch.
+        /// </summary>
+        internal AvaloniaList<Visual> VisualChildrenList => _visualChildren;
 
         /// <summary>
         /// Gets the root of the visual tree, if the control is attached to a visual tree.

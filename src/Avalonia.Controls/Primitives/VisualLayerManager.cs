@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Avalonia.Layout;
+using Avalonia.Layout.Pipeline;
 using Avalonia.LogicalTree;
 
 namespace Avalonia.Controls.Primitives
@@ -170,22 +171,21 @@ namespace Avalonia.Controls.Primitives
         }
 
         /// <inheritdoc />
-        protected internal override Layout.Pipeline.LayoutAlgorithm? GetLayoutAlgorithm()
+        protected override Layout.Pipeline.LayoutAlgorithm ComputeLayoutAlgorithm()
         {
             // Locate the decorated child among the children the snapshot will include, so the
-            // algorithm can tell it apart from the layers whatever their relative order.
+            // algorithm can tell it apart from the layers.
             var child = Child;
             var childIndex = -1;
 
             if (child is not null)
             {
-                var visualChildren = VisualChildren;
+                var layoutChildrenCount = GetLayoutChildrenCount();
                 var snapshotIndex = 0;
 
-                for (var i = 0; i < visualChildren.Count; i++)
+                for (var i = 0; i < layoutChildrenCount; i++)
                 {
-                    if (visualChildren[i] is Layoutable { IsVisible: true } layoutable &&
-                        layoutable.GetLayoutAlgorithm() is { } algorithm)
+                    if (GetLayoutChild(i) is { IsVisible: true, LayoutAlgorithm: not null } layoutable)
                     {
                         if (ReferenceEquals(layoutable, child))
                         {
@@ -198,9 +198,21 @@ namespace Avalonia.Controls.Primitives
                 }
             }
 
-            var padding = GetLayoutPadding(UseLayoutRounding, LayoutHelper.GetLayoutScale(this));
-            return new VisualLayerManagerLayoutAlgorithm(padding, childIndex);
+            var inputs = LayoutNodeInputs.FromLayoutable(this);
+            var padding = GetLayoutPadding(inputs.UseLayoutRounding, LayoutHelper.GetLayoutScale(this));
+            return new VisualLayerManagerLayoutAlgorithm(inputs, padding, childIndex);
         }
+
+        /// <summary>
+        /// The visual layer manager lays out its layers and then its decorated child, like its
+        /// classic measure/arrange implementations do — never other visual children.
+        /// </summary>
+        protected internal override int GetLayoutChildrenCount()
+            => _layers.Count + (Child is null ? 0 : 1);
+
+        /// <inheritdoc cref="GetLayoutChildrenCount"/>
+        protected internal override Layoutable? GetLayoutChild(int index)
+            => index < _layers.Count ? _layers[index] : Child;
 
         /// <inheritdoc />
         protected override Size MeasureOverride(Size availableSize)
