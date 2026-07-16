@@ -19,7 +19,7 @@ public sealed class PipelineLayoutManager : ILayoutManager
 {
     private readonly ILayoutRoot _owner;
     private readonly Func<Size>? _availableSize;
-    private readonly LayoutPipeline _pipeline = new() { ParallelismThreshold = int.MaxValue };
+    private readonly LayoutPipeline _pipeline = new()/* { ParallelismThreshold = int.MaxValue }*/;
     private readonly Action _invokeOnRender;
     private bool _dirty = true;
     private bool _queued;

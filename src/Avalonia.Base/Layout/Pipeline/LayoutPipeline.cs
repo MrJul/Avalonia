@@ -17,7 +17,7 @@ namespace Avalonia.Layout.Pipeline;
 /// <see cref="Layoutable.LayoutAlgorithm"/>; others are skipped entirely, stay unprepared
 /// and won't render.</item>
 /// <item><b>Measure</b> (parallel): a dependency-driven wavefront over the snapshot, executed
-/// on the dedicated <see cref="LayoutWorkerPool"/>. Work items are node indices: a container
+/// on the dedicated <see cref="ElasticWorkerQueue"/>. Work items are node indices: a container
 /// pushes its children as items (<see cref="LayoutChildrenDependency.Independent"/> all at
 /// once, <see cref="LayoutChildrenDependency.Sequential"/> one at a time), and its own combine
 /// runs when the last child completes — no work item ever blocks. Subtrees smaller than
@@ -34,6 +34,7 @@ namespace Avalonia.Layout.Pipeline;
 [Unstable]
 public sealed class LayoutPipeline
 {
+    private readonly ElasticWorkerQueue _workerQueue = new(maxThreads: 2);
     private readonly LayoutTreeSnapshotBuilder _snapshotBuilder = new();
 
     /// <summary>
@@ -46,7 +47,7 @@ public sealed class LayoutPipeline
 
     /// <summary>
     /// Minimum number of nodes in a subtree for it to be split into separate work items
-    /// executed by the <see cref="LayoutWorkerPool"/>; smaller subtrees are processed inline
+    /// executed by the worker pool; smaller subtrees are processed inline
     /// on the thread that reaches them, and a whole tree below the threshold never touches
     /// the pool at all.
     /// </summary>
@@ -116,7 +117,10 @@ public sealed class LayoutPipeline
         else
         {
             tree.NodeAvailableSize[root] = availableSize;
-            LayoutWorkerPool.Instance.Execute(new MeasureProcessor(this, tree), root);
+
+            _workerQueue.Processor = new MeasureProcessor(this, tree);
+            _workerQueue.EnqueueAndWait(LayoutWorkItem.Pack(root, 1));
+            //LayoutWorkerPool.Instance.Execute(new MeasureProcessor(this, tree), LayoutWorkItem.Pack(root, 1));
         }
     }
 
@@ -137,78 +141,147 @@ public sealed class LayoutPipeline
             _tree = tree;
         }
 
-        public void Process(int item) => _pipeline.ProcessMeasureItem(_tree, item);
+        public void Process(long item)
+        {
+            var firstNode = LayoutWorkItem.GetFirstNode(item);
+            var count = LayoutWorkItem.GetCount(item);
+
+            for (var i = 0; i < count; i++)
+                _pipeline.ProcessMeasureItem(_tree, firstNode + i);
+        }
     }
 
     private void ProcessMeasureItem(LayoutTreeSnapshot tree, int node)
     {
-        var availableSize = tree.NodeAvailableSize[node];
-
-        // Classic engine guard (Layoutable.Measure): a subtree whose measures are all valid
-        // and which receives the same constraint as the previous pass isn't re-measured — the
-        // prefilled desired size is reused and the whole subtree is pruned.
-        ref readonly var record = ref tree.Nodes.GetRef(node);
-        if (record.IsMeasureValid && record.PreviousMeasureSize == availableSize)
+        // Processing loops instead of recursing or re-queueing: a completed node may unlock
+        // its next sequential sibling, and a sequential container's first child is processed
+        // directly — a sequential chain has no parallelism to gain, so queue round-trips on it
+        // are pure latency.
+        while (node >= 0)
         {
-            CompleteMeasuredNode(tree, node);
-            return;
-        }
+            var availableSize = tree.NodeAvailableSize[node];
 
-        if (ShouldProcessInline(tree, node))
-        {
-            MeasureNode(tree, node, availableSize);
-            CompleteMeasuredNode(tree, node);
-            return;
-        }
+            // Classic engine guard (Layoutable.Measure): a subtree whose measures are all valid
+            // and which receives the same constraint as the previous pass isn't re-measured —
+            // the prefilled desired size is reused and the whole subtree is pruned.
+            ref readonly var record = ref tree.Nodes.GetRef(node);
+            if (record.IsMeasureValid && record.PreviousMeasureSize == availableSize)
+            {
+                node = CompleteMeasuredNode(tree, node);
+                continue;
+            }
 
-        // Expand the container: compute its constraint and push its children as work items.
-        // Its own combine runs when the last child completes, in CompleteMeasuredNode.
-        var constrainedSize = ComputeConstrainedSize(tree, node, availableSize);
-        tree.NodeConstrainedSize[node] = constrainedSize;
+            if (ShouldProcessInline(tree, node))
+            {
+                MeasureNode(tree, node, availableSize);
+                node = CompleteMeasuredNode(tree, node);
+                continue;
+            }
 
-        var algorithm = tree.Nodes[node].Algorithm;
-        ref readonly var children = ref tree.Children.GetRef(node);
-        var firstChild = children.FirstChild;
-        var count = children.Count;
+            // Expand the container: compute its constraint and hand its children to the pool.
+            // Its own combine runs when the last child completes, in CompleteMeasuredNode.
+            var constrainedSize = ComputeConstrainedSize(tree, node, availableSize);
+            tree.NodeConstrainedSize[node] = constrainedSize;
 
-        if (algorithm.MeasureDependency == LayoutChildrenDependency.Sequential)
-        {
-            tree.SequentialCursor[node] = 0;
-            ScheduleMeasure(tree, firstChild,
-                algorithm.GetChildAvailableSize(0, constrainedSize, ReadOnlySpan<Size>.Empty));
-        }
-        else
-        {
+            var algorithm = tree.Nodes[node].Algorithm;
+            ref readonly var children = ref tree.Children.GetRef(node);
+            var firstChild = children.FirstChild;
+            var count = children.Count;
+
+            if (algorithm.MeasureDependency == LayoutChildrenDependency.Sequential)
+            {
+                tree.SequentialCursor[node] = 0;
+                tree.NodeAvailableSize[firstChild] =
+                    algorithm.GetChildAvailableSize(0, constrainedSize, ReadOnlySpan<Size>.Empty);
+                node = firstChild;
+                continue;
+            }
+
             tree.PendingChildren[node] = count;
 
             for (var i = 0; i < count; i++)
             {
-                ScheduleMeasure(tree, firstChild + i,
-                    algorithm.GetChildAvailableSize(i, constrainedSize, ReadOnlySpan<Size>.Empty));
+                tree.NodeAvailableSize[firstChild + i] =
+                    algorithm.GetChildAvailableSize(i, constrainedSize, ReadOnlySpan<Size>.Empty);
             }
+
+            EnqueueChildren(tree, firstChild, count);
+            return;
         }
     }
 
-    private static void ScheduleMeasure(LayoutTreeSnapshot tree, int node, Size availableSize)
+    /// <summary>
+    /// Hands a node's children to the worker pool: children large enough to expand become
+    /// individual items, while runs of small siblings are packed into range items carrying
+    /// roughly <see cref="ParallelismThreshold"/> nodes of work each — keeping the per-item
+    /// overhead small and contiguous runs on a single worker (no false sharing on the
+    /// node-indexed arrays). The children's constraints or slots must be stored before calling.
+    /// </summary>
+    private void EnqueueChildren(LayoutTreeSnapshot tree, int firstChild, int count)
     {
-        tree.NodeAvailableSize[node] = availableSize;
-        LayoutWorkerPool.Instance.Enqueue(node);
+        var rangeStart = -1;
+        var rangeCount = 0;
+        var rangeWork = 0;
+
+        for (var i = 0; i < count; i++)
+        {
+            var child = firstChild + i;
+            var subtreeSize = tree.Children.GetRef(child).SubtreeSize;
+
+            if (subtreeSize >= ParallelismThreshold)
+            {
+                FlushRange();
+                var workItem = LayoutWorkItem.Pack(child, 1);
+                _workerQueue.Enqueue(workItem);
+                //LayoutWorkerPool.Instance.Enqueue(LayoutWorkItem.Pack(child, 1));
+            }
+            else
+            {
+                if (rangeStart < 0)
+                {
+                    rangeStart = child;
+                    rangeCount = 0;
+                    rangeWork = 0;
+                }
+
+                rangeCount++;
+                rangeWork += subtreeSize;
+
+                if (rangeWork >= ParallelismThreshold)
+                    FlushRange();
+            }
+        }
+
+        FlushRange();
+
+        void FlushRange()
+        {
+            if (rangeStart >= 0)
+            {
+                var workItem = LayoutWorkItem.Pack(rangeStart, rangeCount);
+                _workerQueue.Enqueue(workItem);
+                //LayoutWorkerPool.Instance.Enqueue(LayoutWorkItem.Pack(rangeStart, rangeCount));
+                rangeStart = -1;
+            }
+        }
     }
 
     /// <summary>
     /// Called when a node's desired size is known — thanks to the breadth-first contiguity it
     /// already sits at its index in <see cref="LayoutTreeSnapshot.DesiredSize"/>, which doubles
-    /// as the parent's child sizes span. Either schedules the next sequential sibling or, when
-    /// this was the last pending child, combines the parent and continues cascading upwards.
+    /// as the parent's child sizes span. When this was the last pending child, combines the
+    /// parent and cascades upwards. Returns the next sequential sibling unlocked by this
+    /// completion — processed by the caller on the current thread — or -1 when there is
+    /// nothing more to do.
     /// </summary>
-    private void CompleteMeasuredNode(LayoutTreeSnapshot tree, int node)
+    private int CompleteMeasuredNode(LayoutTreeSnapshot tree, int node)
     {
         while (true)
         {
             var parent = tree.Nodes.GetRef(node).Parent;
 
             if (parent < 0)
-                return;
+                return -1;
 
             var algorithm = tree.Nodes[parent].Algorithm;
             ref readonly var parentChildren = ref tree.Children.GetRef(parent);
@@ -218,23 +291,23 @@ public sealed class LayoutPipeline
             if (algorithm.MeasureDependency == LayoutChildrenDependency.Sequential)
             {
                 // A sequential container has a single child in flight: the thread completing
-                // it owns the cursor and schedules the next sibling.
+                // it owns the cursor and continues with the next sibling.
                 var next = ++tree.SequentialCursor[parent];
 
                 if (next < count)
                 {
-                    ScheduleMeasure(tree, firstChild + next,
-                        algorithm.GetChildAvailableSize(
-                            next,
-                            tree.NodeConstrainedSize[parent],
-                            tree.DesiredSize.AsSpan(firstChild, next)));
-                    return;
+                    var sibling = firstChild + next;
+                    tree.NodeAvailableSize[sibling] = algorithm.GetChildAvailableSize(
+                        next,
+                        tree.NodeConstrainedSize[parent],
+                        tree.DesiredSize.AsSpan(firstChild, next));
+                    return sibling;
                 }
             }
 
             else if (Interlocked.Decrement(ref tree.PendingChildren.GetRef(parent)) != 0)
             {
-                return;
+                return -1;
             }
 
             // Last child measured: combine and finish the parent, then cascade.
@@ -393,7 +466,8 @@ public sealed class LayoutPipeline
         else
         {
             tree.NodeSlot[root] = rect;
-            LayoutWorkerPool.Instance.Execute(new ArrangeProcessor(this, tree), root);
+            _workerQueue.Processor = new ArrangeProcessor(this, tree);
+            _workerQueue.EnqueueAndWait(LayoutWorkItem.Pack(root, 1));
         }
     }
 
@@ -408,7 +482,14 @@ public sealed class LayoutPipeline
             _tree = tree;
         }
 
-        public void Process(int item) => _pipeline.ProcessArrangeItem(_tree, item);
+        public void Process(long item)
+        {
+            var firstNode = LayoutWorkItem.GetFirstNode(item);
+            var count = LayoutWorkItem.GetCount(item);
+
+            for (var i = 0; i < count; i++)
+                _pipeline.ProcessArrangeItem(_tree, firstNode + i);
+        }
     }
 
     private void ProcessArrangeItem(LayoutTreeSnapshot tree, int node)
@@ -437,11 +518,7 @@ public sealed class LayoutPipeline
         // The children slots were written directly into NodeSlot by ArrangeNodeCore, thanks
         // to the breadth-first contiguity: just push the children.
         ref readonly var children = ref tree.Children.GetRef(node);
-        var firstChild = children.FirstChild;
-        var count = children.Count;
-
-        for (var i = 0; i < count; i++)
-            LayoutWorkerPool.Instance.Enqueue(firstChild + i);
+        EnqueueChildren(tree, children.FirstChild, children.Count);
     }
 
     /// <summary>
