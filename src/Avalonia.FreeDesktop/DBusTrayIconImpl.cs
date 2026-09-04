@@ -56,14 +56,16 @@ namespace Avalonia.FreeDesktop
             _connection.AddMethodHandler(_statusNotifierItemDbusObj);
             _statusNotifierItemDbusObj.ActivationDelegate += () => OnClicked?.Invoke();
 
-            WatchAsync();
+            _ = WatchAsync();
         }
 
-        private async void WatchAsync()
+        private async Task WatchAsync()
         {
+            _watchCts = new CancellationTokenSource();
+            var cancellationToken = _watchCts.Token;
+
             try
             {
-                _watchCts = new CancellationTokenSource();
                 using var watcher = await _connection!.WatchNameOwnerAsync("org.kde.StatusNotifierWatcher");
                 var owner = watcher.GetCurrentOwner();
                 OnOwnerChanged(owner);
@@ -72,31 +74,34 @@ namespace Avalonia.FreeDesktop
                     if (owner is not null)
                     {
                         var ct = watcher.GetOwnerChangedCancellationToken(owner);
-                        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _watchCts.Token);
+                        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, cancellationToken);
                         try
                         {
                             await Task.Delay(Timeout.Infinite, linked.Token);
                         }
-                        catch (OperationCanceledException) when (!_watchCts.IsCancellationRequested)
+                        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                         { }
                     }
                     else
                     {
                         try
                         {
-                            await watcher.WaitForOwnerAsync(_watchCts.Token);
+                            await watcher.WaitForOwnerAsync(cancellationToken);
                         }
-                        catch (OperationCanceledException) when (!_watchCts.IsCancellationRequested)
+                        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                         { }
                     }
                     owner = watcher.GetCurrentOwner();
                     OnOwnerChanged(owner);
                 }
             }
-            catch (Exception e) when (!_isDisposed)
+            catch (Exception e)
             {
-                Logger.TryGet(LogEventLevel.Error, "DBUS")
-                    ?.Log(this, "Interface 'org.kde.StatusNotifierWatcher' is unavailable.\n{Exception}", e);
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    Logger.TryGet(LogEventLevel.Error, "DBUS")
+                        ?.Log(this, "Interface 'org.kde.StatusNotifierWatcher' is unavailable.\n{Exception}", e);
+                }
             }
         }
 
@@ -110,28 +115,24 @@ namespace Avalonia.FreeDesktop
                 _serviceConnected = true;
                 _statusNotifierWatcher = new StatusNotifierWatcher(_connection, "org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher");
 
-                DestroyTrayIcon();
+                _ = DestroyTrayIconAsync();
 
                 if (_isVisible)
-                    CreateTrayIcon();
+                    _ = CreateTrayIconAsync();
             }
             else if (_serviceConnected & newOwner is null)
             {
-                DestroyTrayIcon();
+                _ = DestroyTrayIconAsync();
                 _serviceConnected = false;
             }
         }
 
-        private async void CreateTrayIcon()
+        private async Task CreateTrayIconAsync()
         {
             if (_connection is null || !_serviceConnected || _isDisposed || _statusNotifierWatcher is null)
                 return;
 
-#if NET5_0_OR_GREATER
             var pid = Environment.ProcessId;
-#else
-            var pid = Process.GetCurrentProcess().Id;
-#endif
             var tid = s_trayIconInstanceId++;
 
             _connection.RemoveMethodHandler(_statusNotifierItemDbusObj!.Path);
@@ -145,19 +146,19 @@ namespace Avalonia.FreeDesktop
             _statusNotifierItemDbusObj.SetIcon(_icon);
         }
 
-        private void DestroyTrayIcon()
+        private async Task DestroyTrayIconAsync()
         {
             if (_connection is null || !_serviceConnected || _isDisposed || _statusNotifierItemDbusObj is null || _sysTrayServiceName is null)
                 return;
 
-            _connection!.ReleaseNameAsync(_sysTrayServiceName);
             _connection.RemoveMethodHandler(_statusNotifierItemDbusObj.Path);
+            await _connection!.ReleaseNameAsync(_sysTrayServiceName);
         }
 
         public void Dispose()
         {
             IsActive = false;
-            DestroyTrayIcon();
+            _ = DestroyTrayIconAsync();
             (MenuExporter as IDisposable)?.Dispose();
             _watchCts?.Cancel();
             _isDisposed = true;
@@ -207,18 +208,22 @@ namespace Avalonia.FreeDesktop
                 return;
             }
 
-            switch (visible)
-            {
-                case true when !_isVisible:
-                    DestroyTrayIcon();
-                    CreateTrayIcon();
-                    break;
-                case false when _isVisible:
-                    DestroyTrayIcon();
-                    break;
-            }
-
+            _ = ApplyVisibilityAsync();
             _isVisible = visible;
+
+            async Task ApplyVisibilityAsync()
+            {
+                switch (visible)
+                {
+                    case true when !_isVisible:
+                        await DestroyTrayIconAsync();
+                        await CreateTrayIconAsync();
+                        break;
+                    case false when _isVisible:
+                        await DestroyTrayIconAsync();
+                        break;
+                }
+            }
         }
 
         public void SetToolTipText(string? text)
