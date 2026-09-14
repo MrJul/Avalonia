@@ -15,8 +15,11 @@ namespace Avalonia.Skia
         private readonly object _lock = new();
         private PathCache _pathCache;
         private SKPathMeasure? _cachedPathMeasure;
+        private volatile int _version;
 
         private SKPathMeasure CachedPathMeasure => _cachedPathMeasure ??= new SKPathMeasure(StrokePath!);
+
+        internal int Version => _version;
 
         /// <inheritdoc />
         public abstract Rect Bounds { get; }
@@ -167,6 +170,8 @@ namespace Avalonia.Skia
             {
                 _pathCache.Dispose();
                 _pathCache = default;
+                _cachedPathMeasure = null;
+                ++_version;
             }
         }
 
